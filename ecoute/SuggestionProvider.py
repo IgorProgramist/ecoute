@@ -51,6 +51,7 @@ class SuggestionProvider:
     def __init__(self, api_key):
         self.enabled = bool(api_key)
         self.last_question = None
+        self.last_ts = None
         self.busy = False
         self.prepared = load_prepared_answers()
         self.prepared_norm = [(q, a, _normalize(q)) for q, a in self.prepared]
@@ -85,12 +86,16 @@ class SuggestionProvider:
                 return line[len("Speaker:"):].strip().strip("[]").strip()
         return None
 
-    def maybe_update(self, transcript, display):
+    def maybe_update(self, transcript, display, speaker_ts=None):
         if self.busy:
             return
         question = self._extract_speaker_text(transcript)
-        if not question or question == self.last_question:
+        if not question:
             return
+        is_new_phrase = speaker_ts is not None and speaker_ts != self.last_ts
+        if question == self.last_question and not is_new_phrase:
+            return
+        self.last_ts = speaker_ts
         self.last_question = question
 
         prepared = self._best_prepared(question)

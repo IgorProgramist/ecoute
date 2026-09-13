@@ -24,7 +24,9 @@ def update_transcript_UI(transcriber, display, suggestion_provider):
         if line.startswith("You:")
     )
     display.sync(you_text)
-    suggestion_provider.maybe_update(transcriber.get_transcript(), display)
+    suggestion_provider.maybe_update(
+        transcriber.get_transcript(), display, transcriber.get_latest_speaker_ts()
+    )
     display.after(100, update_transcript_UI, transcriber, display, suggestion_provider)
 
 
