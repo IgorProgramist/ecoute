@@ -19,8 +19,8 @@ def _norm(text):
 def _word_hit(wj, yn, heard):
     if f" {wj} " in yn:
         return True
-    if len(wj) >= 4:
-        pref = wj[:4]
+    if len(wj) >= 6:
+        pref = wj[:6]
         for h in heard:
             if h.startswith(pref):
                 return True
@@ -76,9 +76,9 @@ class Teleprompter(tk.Canvas):
             return
         yn = f" {_norm(you_text)} "
         heard = yn.split()
-        # точний збіг або збіг за коренем слова (4 літери) — крапки/форми не заважають
-        # перестриб до 5 нерозпізнаних слів
-        for k in range(6):
+        # точний збіг або збіг за коренем слова (6 літер) — крапки/форми не заважають
+        # перестриб максимум 3 (не даємо стрибати далеко на фальшивих збігах)
+        for k in range(3):
             j = self._idx + k
             if j >= len(self._words):
                 break
