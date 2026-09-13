@@ -75,6 +75,7 @@ class AudioTranscriber:
                     print(f"Transcription error for You: {e}")
                 finally:
                     os.unlink(path)
+                    source_info["last_sample"] = bytes()
             
             if speaker_data:
                 source_info = self.audio_sources["Speaker"]
