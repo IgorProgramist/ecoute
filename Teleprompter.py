@@ -16,6 +16,17 @@ def _norm(text):
     return re.sub(r"\s+", " ", text).strip()
 
 
+def _word_hit(wj, yn, heard):
+    if f" {wj} " in yn:
+        return True
+    if len(wj) >= 4:
+        pref = wj[:4]
+        for h in heard:
+            if h.startswith(pref):
+                return True
+    return False
+
+
 class Teleprompter(tk.Canvas):
     def __init__(self, parent, height=140):
         super().__init__(parent, height=height, highlightthickness=0, bg=CHROMA)
@@ -64,13 +75,15 @@ class Teleprompter(tk.Canvas):
             self.advance()
             return
         yn = f" {_norm(you_text)} "
-        # точний збіг слова: поточне, або наступне якщо поточне не сказано
-        for k in range(3):
+        heard = yn.split()
+        # точний збіг або збіг за коренем слова (4 літери) — крапки/форми не заважають
+        # перестриб до 5 нерозпізнаних слів
+        for k in range(6):
             j = self._idx + k
             if j >= len(self._words):
                 break
             wj = _norm(self._words[j])
-            hit = wj and f" {wj} " in yn
+            hit = wj and _word_hit(wj, yn, heard)
             if hit:
                 total = sum(self._font.measure(self._words[self._idx + i] + " ") for i in range(k + 1))
                 if k > 0:

@@ -1,3 +1,26 @@
+import os
+import sys
+import glob
+
+def _add_cuda_dll_dirs():
+    # faster-whisper (CTranslate2) потребує власні CUDA DLLs, torch-івські не підходять
+    base = os.path.join(os.path.dirname(sys.executable), "..", "..", "Roaming", "Python", "Python313", "site-packages", "nvidia")
+    for pattern in [os.path.join(base, "cublas", "bin"), os.path.join(base, "cudnn", "bin")]:
+        pattern = os.path.normpath(pattern)
+        if os.path.isdir(pattern):
+            os.add_dll_directory(pattern)
+    # fallback: пошук через pip-пакети незалежно від розташування
+    try:
+        import importlib.util
+        for pkg in ("nvidia.cublas", "nvidia.cudnn"):
+            spec = importlib.util.find_spec(pkg.replace(".", "\\") if False else pkg)
+            if spec and spec.submodule_search_locations:
+                bin_dir = os.path.join(list(spec.submodule_search_locations)[0], "bin")
+                if os.path.isdir(bin_dir):
+                    os.add_dll_directory(bin_dir)
+    except Exception:
+        pass
+
 import torch
 from faster_whisper import WhisperModel
 from openai import OpenAI
@@ -12,15 +35,29 @@ def get_model(use_api):
 class FasterWhisperTranscriber:
     def __init__(self):
         print(f"[INFO] Loading Faster Whisper model ({config.WHISPER_MODEL})...")
-        self.model = WhisperModel(config.WHISPER_MODEL, device="cuda" if torch.cuda.is_available() else "cpu",
-                                  compute_type="float32" if torch.cuda.is_available() else "int8")
-        print(f"[INFO] Faster Whisper using GPU: {torch.cuda.is_available()}")
+        _add_cuda_dll_dirs()
+        device = "cuda" if torch.cuda.is_available() else "cpu"
+        try:
+            self.model = WhisperModel(config.WHISPER_MODEL, device=device, compute_type="int8")
+            # тестовий прогін: CUDA DLLs можуть бути відсутні — дізнаємось одразу
+            import numpy as _np
+            import faster_whisper as _fw
+            _dummy = _np.zeros((80, 3000), dtype=_np.float32)
+            self.model.encode(_dummy)
+            print(f"[INFO] Faster Whisper using {device.upper()}")
+        except Exception as e:
+            print(f"[WARN] {device.upper()} failed ({e}), falling back to CPU")
+            device = "cpu"
+            self.model = WhisperModel(config.WHISPER_MODEL, device=device, compute_type="int8")
+            print("[INFO] Faster Whisper using CPU")
+        self.device = device
 
     def get_transcription(self, wav_file_path):
         try:
             lang = config.TRANSCRIBE_LANGUAGE
             language = lang if lang in ("en", "uk") else None
-            segments, _ = self.model.transcribe(wav_file_path, beam_size=config.BEAM_SIZE, language=language)
+            segments, _ = self.model.transcribe(wav_file_path, beam_size=config.BEAM_SIZE, language=language,
+                                                vad_filter=True, without_timestamps=True)
             full_text = " ".join(segment.text for segment in segments)
             return full_text.strip()
         except Exception as e:

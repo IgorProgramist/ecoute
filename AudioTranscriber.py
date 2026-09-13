@@ -4,9 +4,11 @@ import threading
 import tempfile
 import custom_speech_recognition as sr
 import io
+import numpy
 from datetime import datetime, timedelta
 import pyaudiowpatch as pyaudio
 from heapq import merge
+import config
 
 PHRASE_TIMEOUT = 3.05
 MAX_PHRASES = 10
@@ -114,9 +116,24 @@ class AudioTranscriber:
 
     def process_mic_data(self, data, temp_file_name):
         audio_data = sr.AudioData(data, self.audio_sources["You"]["sample_rate"], self.audio_sources["You"]["sample_width"])
-        wav_data = io.BytesIO(audio_data.get_wav_data())
+        wav_data = self._amplify_wav_bytes(audio_data.get_wav_data(), config.MIC_GAIN)
         with open(temp_file_name, 'w+b') as f:
-            f.write(wav_data.read())
+            f.write(wav_data)
+
+    def _amplify_wav_bytes(self, wav_bytes, gain):
+        if not gain or gain <= 1.0:
+            return wav_bytes
+        buf = io.BytesIO(wav_bytes)
+        with wave.open(buf, 'rb') as r:
+            params = r.getparams()
+            frames = r.readframes(r.getnframes())
+        arr = numpy.frombuffer(frames, dtype=numpy.int16).astype(numpy.float32) * gain
+        arr = numpy.clip(arr, -32767, 32767).astype(numpy.int16)
+        out = io.BytesIO()
+        with wave.open(out, 'wb') as w:
+            w.setparams(params)
+            w.writeframes(arr.tobytes())
+        return out.getvalue()
 
     def process_speaker_data(self, data, temp_file_name):
         with wave.open(temp_file_name, 'wb') as wf:
