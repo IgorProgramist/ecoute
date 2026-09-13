@@ -147,6 +147,11 @@ class AudioTranscriber:
         cutoff = datetime.utcnow() - timedelta(seconds=window_seconds)
         parts = [text for text, ts in self.transcript_data["You"] if ts >= cutoff]
         return "".join(parts)
+
+    def get_latest_speaker_ts(self):
+        if self.transcript_data["Speaker"]:
+            return self.transcript_data["Speaker"][0][1]
+        return None
     
     def clear_transcript_data(self):
         self.transcript_data["You"].clear()
