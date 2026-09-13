@@ -494,10 +494,10 @@ class Recognizer(AudioSource):
         elapsed_time = 0  # number of seconds of audio read
         buffer = b""  # an empty buffer means that the stream has ended and there is no data left to read
         while True:
-            frames = collections.deque()
+            frames = collections.deque(maxlen=4096)
 
+            # store audio input until the phrase starts
             if snowboy_configuration is None:
-                # store audio input until the phrase starts
                 while True:
                     # handle waiting too long for phrase by raising an exception
                     elapsed_time += seconds_per_buffer
@@ -540,6 +540,10 @@ class Recognizer(AudioSource):
                 if len(buffer) == 0: break  # reached end of the stream
                 frames.append(buffer)
                 phrase_count += 1
+                # guard: не даємо frames рости без межі (MemoryError при
+                # збої BT-потоку, коли phrase_time_limit не спрацьовує)
+                if len(frames) > 4096:
+                    frames.popleft()
 
                 # check if speaking has stopped for longer than the pause threshold on the audio input
                 energy = audioop.rms(buffer, source.SAMPLE_WIDTH)  # unit energy of the audio signal within the buffer
@@ -580,6 +584,13 @@ class Recognizer(AudioSource):
                         audio = self.listen(s, 1, phrase_time_limit)
                     except WaitTimeoutError:  # listening timed out, just try again
                         pass
+                    except MemoryError:
+                        # BT-гарнітура може глюканути і роздути буфери; не даємо потоку померти
+                        print("[WARN] listen: MemoryError, retrying...")
+                        time.sleep(0.5)
+                    except Exception as e:
+                        print(f"[WARN] listen error: {e!r}; retrying...")
+                        time.sleep(0.5)
                     else:
                         if running[0]: callback(self, audio)
 
