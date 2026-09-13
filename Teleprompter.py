@@ -64,15 +64,23 @@ class Teleprompter(tk.Canvas):
             self.advance()
             return
         yn = f" {_norm(you_text)} "
-        heard = yn.split()
-        wj = _norm(self._words[self._idx])
-        hit = wj and (f" {wj} " in yn or bool(difflib.get_close_matches(wj, heard, cutoff=0.6)))
-        if hit:
-            print(f"[PROMPT] heard '{self._words[self._idx]}' -> advance 1")
-            self.advance()
-        elif self._last_debug_word != self._words[self._idx]:
-            self._last_debug_word = self._words[self._idx]
-            print(f"[PROMPT] waiting for: '{self._words[self._idx]}' | heard: ...{yn[-100:]}")
+        # точний збіг слова: поточне, або наступне якщо поточне не сказано
+        for k in range(3):
+            j = self._idx + k
+            if j >= len(self._words):
+                break
+            wj = _norm(self._words[j])
+            hit = wj and f" {wj} " in yn
+            if hit:
+                total = sum(self._font.measure(self._words[self._idx + i] + " ") for i in range(k + 1))
+                if k > 0:
+                    print("[PROMPT] skipped 1 unrecognised word(s)")
+                print(f"[PROMPT] heard '{self._words[j]}' -> advance {k + 1}")
+                self._begin_slide(k + 1, total)
+                break
+            elif k == 0 and self._last_debug_word != self._words[j]:
+                self._last_debug_word = self._words[j]
+                print(f"[PROMPT] waiting for: '{self._words[j]}' | heard: ...{yn[-100:]}")
 
     # ---------- internal ----------
     def advance(self):
@@ -81,7 +89,11 @@ class Teleprompter(tk.Canvas):
         if self._idx >= len(self._words):
             self._finish()
             return
-        self._w0 = self._font.measure(self._words[self._idx] + " ")
+        self._begin_slide(1, self._font.measure(self._words[self._idx] + " "))
+
+    def _begin_slide(self, k, total):
+        self._pending_k = k
+        self._w_total = total
         self._slide_start = time.monotonic()
         self._phase = "slide"
         self._slide_frame()
@@ -91,11 +103,11 @@ class Teleprompter(tk.Canvas):
             return
         t = (time.monotonic() - self._slide_start) / max(config.SLIDE_DURATION_MS / 1000, 0.001)
         if t >= 1.0:
-            self._idx += 1
+            self._idx += self._pending_k
             self._show_at_margin()
             return
         eased = t * t * (3 - 2 * t)
-        x = LEFT_MARGIN - self._w0 * eased
+        x = LEFT_MARGIN - self._w_total * eased
         y = self._safe_height() // 2
         self.coords(self._win, x, y)
         self._after_id = self.after(15, self._slide_frame)

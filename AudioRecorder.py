@@ -1,6 +1,7 @@
 import custom_speech_recognition as sr
 import pyaudiowpatch as pyaudio
 from datetime import datetime
+import config
 
 RECORD_TIMEOUT = 3
 ENERGY_THRESHOLD = 1000
@@ -11,6 +12,8 @@ class BaseRecorder:
         self.recorder = sr.Recognizer()
         self.recorder.energy_threshold = ENERGY_THRESHOLD
         self.recorder.dynamic_energy_threshold = DYNAMIC_ENERGY_THRESHOLD
+        self.recorder.pause_threshold = 0.35
+        self.recorder.non_speaking_duration = 0.25
 
         if source is None:
             raise ValueError("audio source can't be None")
@@ -32,8 +35,29 @@ class BaseRecorder:
 
 class DefaultMicRecorder(BaseRecorder):
     def __init__(self):
-        super().__init__(source=sr.Microphone(sample_rate=16000))
+        mic_index = self._find_mic()
+        if mic_index is not None:
+            print(f"[INFO] Using configured mic device index {mic_index}")
+            source = sr.Microphone(device_index=mic_index, sample_rate=16000)
+        else:
+            print("[INFO] Using default Windows microphone")
+            source = sr.Microphone(sample_rate=16000)
+        super().__init__(source=source)
         self.adjust_for_noise("Default Mic", "Please make some noise from the Default Mic...")
+
+    @staticmethod
+    def _find_mic():
+        pattern = config.MIC_DEVICE_NAME.strip().lower()
+        if not pattern:
+            return None
+        with pyaudio.PyAudio() as p:
+            for i in range(p.get_device_count()):
+                d = p.get_device_info_by_index(i)
+                if d['maxInputChannels'] > 0 and "[Loopback]" not in d['name'] \
+                        and pattern in d['name'].lower():
+                    return i
+        print(f"[WARN] Mic device matching '{pattern}' not found, using default")
+        return None
 
 class DefaultSpeakerRecorder(BaseRecorder):
     def __init__(self):
