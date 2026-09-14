@@ -8,187 +8,208 @@
 # збігається з якимось Q (навіть приблизно). Немає збігу — AI-відповідь.
 
 Q: Hi Igor, nice to meet you. How are you?
-A: Hi! Nice to meet you too. I’m good, thank you. A little bit excited about the interview, but in a good way. How are you?
+A: Hi! Nice to meet you too. I’m good, thank you. A little excited about the interview, but in a good way. How are you?
 
 Q: How are you today?
-A: I’m good, thank you. A little bit excited about the interview, but in a good way. I’m glad we could have this call today. How are you?
+A: I’m good, thank you. I’m glad we could have this call today. How are you?
 
 Q: How is your day going?
 A: Pretty good, thank you. It’s a normal working day for me, and I was looking forward to our call.
 
 Q: Did you have a busy week?
-A: Yes, quite busy, but that’s normal for me. I usually have a mix of technical tasks, integration work, and communication with artists or developers, so there is always something to do.
+A: Yes, quite busy, but that’s normal for me. I usually have a mix of integration work, technical tasks, and communication with artists and developers.
 
 Q: Tell me about yourself
-A: Sure. I’m a Unity Technical Artist with more than seven years of experience in game development. Most of my recent experience is connected with slot games and mobile projects. I’ve worked a lot with UI integration, animations, Spine, atlases, localization, and performance optimization. In my current position at Custom Game Studio, I integrate art assets, UI, and animations into Unity, create popup animations, and work with atlases to improve performance and reduce memory usage. Before that I worked at companies like VOLMI, Mad Brain Games, GamePoint, Sigma Software, and Skywind Group, so I’ve seen different projects and production pipelines. I also have a programming background from Flash and AS3 development, which helps me understand developers and technical problems better. What I like most about Technical Art is working between artists and developers and helping both sides get a good final result. That’s one of the main reasons why this SciPlay position looks very interesting to me.
+A: Sure. I’m a Unity Technical Artist with more than seven years in game development. Most of my recent work has been on slot and mobile projects, with a strong focus on UI, art integration, animation, Spine, atlases, localization, and optimization. In my current role at Custom Game Studio, I integrate art and UI into Unity, create popup animations, and work with atlases and performance-related tasks. I also have a programming background from Flash and ActionScript 3, which helps me communicate with developers and understand technical problems. What I like most about Technical Art is being the bridge between artists and developers and helping turn visual ideas into stable production-ready features.
 
 Q: Can you walk me through your experience?
-A: I’m a Unity Technical Artist with more than seven years in game development. I started from development with Flash and AS3, and later moved into Technical Art because I enjoyed working between art and technology. Over the years I worked on slot and mobile games with UI, animations, Spine, atlases, localization, 2D and 3D asset integration, and optimization. Today my main focus is Unity production work, especially UI, art integration, animation, and performance-related tasks.
+A: I started in development with Flash and ActionScript 3, then moved into Technical Art because I enjoyed working between visuals and technology. Over the years I’ve worked on slot and mobile games with UI, animation, Spine, atlases, localization, 2D and 3D asset integration, and optimization. Today my main focus is Unity production work: integrating art, building UI and animation setups, solving visual or technical issues, and keeping performance in mind.
 
 Q: Why did you choose Technical Art?
-A: Because it fits me very well. I like visual work, but I also like technical problems and understanding how things work inside the engine. I started from development, so I already had a technical mindset, and later I moved more into game production, UI, animations, art integration, and optimization. At some point I understood that Technical Art is exactly the place where I feel most comfortable. I can speak with an artist about how something should look and then with a developer about how it should work. I really like this bridge role.
+A: Because it combines the two things I enjoy most: visual work and technical problem-solving. I can discuss the visual goal with an artist, then talk to a developer about constraints or implementation, and help connect those two sides. That bridge role feels very natural to me.
 
 Q: Why do you want to work at SciPlay?
-A: There are several reasons. First, I already have strong experience with slot games, so the product direction is very familiar to me. I worked on slot projects in several companies, and I understand this type of content: a lot of UI, animations, visual feedback, popups, localization, atlases, and ongoing content updates. Second, the responsibilities are very close to what I already do and enjoy: integrating 2D assets, UI, animations, optimization, troubleshooting, and working closely with artists and developers. Third, I like that SciPlay works on live mobile games with a large audience. I already have experience supporting live projects, and I like this environment because your work has a real effect on the product and players. I’m also interested in the AI part of the role because I use AI tools quite actively in my workflow.
+A: The role is very close to my background. I already know slot and mobile production, and I’m used to UI-heavy content, animations, atlases, localization, ongoing updates, and optimization. The responsibilities also match the work I enjoy most: integrating 2D assets, building UI and transitions, troubleshooting visual and technical issues, and working closely with artists and developers. I also like that SciPlay works on live mobile products with a large audience, because I enjoy seeing my work directly affect the product.
 
 Q: Why are you interested in this position?
-A: This position feels very close to my real experience. I already work with Unity, UI, animations, art integration, atlases, optimization, and communication between artists and developers. I also have a lot of experience with slot and mobile projects. So for me this is not a completely new direction; it feels like a logical next step where I can use what I already know and continue growing.
+A: Because it feels like a natural next step rather than a completely new direction. The core tasks — Unity, 2D art integration, UI, animation, optimization, troubleshooting, and cross-team communication — are already a big part of my experience. I can contribute quickly, but there is also room for me to grow in a larger production environment.
 
 Q: What do you expect from SciPlay?
-A: I expect a strong production environment where I can continue growing as a Technical Artist. I would like to work with experienced artists, developers, and other Technical Artists, learn how your team organizes production, and also bring my own experience from slot and mobile projects. I’m especially interested in getting deeper into large-scale Unity production, optimization, UI systems, and improving workflows. I also want to have responsibility for my work and understand the full path from source art to the final result in the game. For me, the best job is when I can both learn and also be useful to the team from the beginning.
+A: I’m looking for a strong production environment with clear ownership, experienced people, and real technical challenges. I’d like to learn how your team organizes large-scale Unity production, while also bringing my experience with slots, mobile UI, animation, integration, and optimization. I’m especially interested in owning work from source art through final in-game implementation.
 
 Q: What are you looking for in your next role?
-A: I want a role where Technical Art is really important to production. I want to work with Unity, UI, asset integration, optimization, animation, and technical problem-solving. I also want to work on a live product with a strong team and continue growing. I’m especially interested in a role where I can use my previous slot-game experience instead of starting completely from zero in a new area.
+A: I want a role where Technical Art is important to production, not just a support function. I want to stay hands-on with Unity, UI, art integration, optimization, animation, and technical problem-solving, while also having clear ownership and working closely with a strong team.
 
 Q: What did you like about your previous companies?
-A: The thing I liked most was responsibility. In different companies, I worked with real production tasks where the result depended on my work. I liked working with artists and developers and solving practical problems together. I also liked live projects because you can see how your work affects the real game and real players. Another thing I liked was variety. In one project I could work with UI and popup animations, in another with Spine, atlases, localization, 3D assets, or scene setup. That variety helped me grow a lot.
+A: I liked having real responsibility and seeing the result of my work in production. I also liked the variety: on one project I might work on UI and popup animations, on another on Spine, atlases, localization, 3D assets, or scene setup. That variety helped me grow and made me comfortable switching between artistic and technical tasks.
 
 Q: What do you like most in your current job?
-A: I like that my current work is very close to real Technical Art production. I integrate UI, art assets, and animations, create popup animations, and work with atlases and optimization. I also like communication with artists and developers because I’m not working in isolation. Usually I need to understand what the artist wants visually, what the developer needs technically, and then find the best solution in Unity. That part is very natural for me.
+A: I like that the work is very practical. I take art, UI, and animation content, integrate it into Unity, solve problems, and make sure the final result works well in production. I also enjoy the communication side, because I’m often translating between what the artist wants visually and what the developer needs technically.
 
 Q: What didn’t you like in your previous jobs?
-A: I don’t like to speak negatively about previous companies because every place gave me useful experience. But I can say that I work better when responsibilities and priorities are clear. If communication is weak or requirements change without enough context, it can create extra work for everyone. So I usually try to solve this by asking questions, documenting decisions, and making the workflow more structured. I prefer solving this kind of problem instead of just complaining about it.
+A: I work best when priorities and responsibilities are clear. When requirements change without enough context, it can create unnecessary rework. I usually try to solve that by asking questions early, documenting decisions, and making sure everyone has the same understanding of the goal.
 
 Q: Why are you looking for a new job?
-A: The main reason is professional growth. I already have solid experience as a Technical Artist, and now I want to work in a stronger and bigger production environment where I can continue growing. I’m especially interested in mobile games, Unity, UI, optimization, and live content production. SciPlay also has a lot of experience with slot and casino games, and this is an area I already know well. So I see this not as a change of direction, but as the next level in the same direction.
+A: Mainly for professional growth. I already have solid experience in Unity Technical Art, and I want a stronger production environment where I can take on more ownership and continue growing in mobile UI, optimization, art integration, and live content production. SciPlay feels like a logical next step in that direction.
 
 Q: Why did you leave your previous job?
-A: I prefer to focus on growth rather than something negative about a previous company. I’m looking for a role that is closer to my long-term Technical Artist direction, with more challenging Unity production tasks, stronger ownership, and more opportunities to grow. For me, changing a job should be a step forward, not just an escape from the previous place.
+A: I prefer to focus on growth rather than something negative about a previous company. I’m looking for a role with more challenging Unity production work, stronger ownership, and a clearer long-term path as a Technical Artist.
 
 Q: Why should we hire you?
-A: Because I already have experience that is very close to this role. I have more than seven years in game development and strong experience as a Unity Technical Artist. I worked with slot games, UI integration, animations, Spine, atlases, localization, and mobile optimization. I’m comfortable working between artists and developers, which I think is one of the most important parts of Technical Art. I’m also quite independent. If I get a problem, I usually try to understand it, find the cause, test solutions, and bring the task to a clear result. And because I also have a programming background, I can understand technical discussions and communicate well with developers. So I think I can be useful quite quickly, but I also still have a lot of motivation to learn and grow.
+A: Because my experience matches the role quite closely. I’ve worked with slot and mobile games, Unity UI, animation, Spine, atlases, localization, art integration, and optimization. I’m comfortable working between artists and developers, and my programming background helps me understand technical discussions. I’m also quite independent: when I get a problem, I try to reproduce it, find the cause, test a focused solution, and bring it to a clear result.
 
 Q: What is your greatest strength?
-A: I think my biggest strength is that I’m persistent when I have a difficult problem. I don’t like random fixes. If something doesn’t work correctly, I try to understand why. For example, if there is a visual or performance problem, I try to separate the possibilities: maybe it is the asset, maybe import settings, maybe UI setup, maybe animation, maybe something technical. Then I check one thing at a time. I think this is very useful for Technical Art because many problems are somewhere between art and programming.
+A: I’m persistent with difficult problems, but I try to be systematic rather than random. If something looks wrong, I separate the possible causes — asset, import settings, UI setup, animation, rendering, or code — and check them one by one. That helps me find the real cause instead of applying random fixes.
 
 Q: What is your biggest weakness?
-A: Sometimes I can go too deep into details. If I see an interesting technical problem, I want to fully understand it, and sometimes I can spend more time on it than necessary. I’ve been improving this by setting priorities for myself and asking: what is the real goal of this task, what is the deadline, and what level of solution is actually needed? So I still like deep technical work, but I’m learning to balance it with production speed.
+A: Sometimes I can go too deep into technical details because I like understanding the full problem. I’ve improved this by asking myself what the actual production goal is, what the deadline is, and what level of solution is really needed. That helps me balance technical quality with speed.
 
 Q: How would you describe yourself as a person?
-A: I would say I’m responsible, calm, and quite easy to work with. I don’t like creating drama around problems. If something is wrong, I prefer to discuss it and find a solution. I’m also quite self-motivated. I like learning new tools and trying to improve the way I work. And if I take responsibility for a task, I really try to finish it properly.
+A: I’d say I’m responsible, calm, and easy to work with. I prefer solving problems without drama, and I’m comfortable asking questions when something is unclear. I’m also quite self-motivated and I like learning new tools and workflows.
 
 Q: What motivates you most at work?
-A: I like seeing a real result. For example, when I take art content, integrate it into Unity, fix problems, optimize it, and finally see it working correctly in the game, that gives me a lot of satisfaction. I also like when my work helps other people. If I improve a pipeline or solve a problem that saves time for artists or developers, that’s very motivating for me. And I like difficult tasks because they usually teach me something new.
+A: Seeing a real result. I like taking content from source art through Unity integration and seeing it work correctly in the game. I’m also motivated when I solve a problem or improve a workflow in a way that makes life easier for artists or developers.
 
 Q: What kind of tasks do you enjoy the most?
-A: I enjoy tasks that combine visual quality with technical thinking. For example, UI integration, asset setup, animation integration, solving visual bugs, atlas optimization, or improving repetitive workflows. I especially like problems where the first solution is not obvious and I need to investigate the real cause.
+A: Tasks that combine visual quality with technical thinking. For example, UI integration, animation setup, atlas optimization, visual debugging, or fixing a recurring workflow problem. I especially like tasks where the first answer is not obvious and I need to investigate the real cause.
 
 Q: What achievement are you most proud of?
-A: For me, one of the biggest achievements is my overall progression from developer to Technical Artist and then working on real live game projects with large teams. I worked on slot games, mobile projects, and different production pipelines. I had to learn UI, animations, Spine, atlases, optimization, localization, and Unity workflows. I’m also proud that I can now work quite independently and support a feature or content pipeline from the art side to the technical implementation. For me, this is more important than one small isolated task.
+A: I’m proud that I moved from a programming background into Technical Art and became comfortable owning real production work across art, UI, animation, integration, and optimization. Over time I became someone who can take visual content, understand the technical constraints, work with both artists and developers, and bring the feature to a stable in-game result. For me, that progression and level of independence is a meaningful achievement.
 
 Q: Tell me about a difficult task you had
-A: Usually the most difficult tasks are the ones where the real problem is not obvious. Something may look like an art problem, but later you find that it is connected with import settings, animation, UI setup, or performance. My normal approach is to reproduce the problem first. Then I divide it into possible causes and check them one by one. I try not to change too many things at once because then you don’t understand what actually fixed the issue. When I find the cause, I also think about whether we can prevent the same problem in the future. That kind of task is difficult, but I actually enjoy it.
+A: A difficult task for me is usually one where the real cause is not obvious. I’ve had cases where something looked like an art problem but could also have been related to import settings, animation, UI setup, or performance. My approach is to reproduce it first, split the problem into possible causes, and test them one by one. I avoid changing many things at once, because then you lose track of what actually fixed the issue. Once I find the cause, I also think about how to prevent the same class of problem in the future.
 
 Q: Tell me about a mistake you made
-A: Of course, I’ve made mistakes. One lesson I learned is that a technically correct solution is not always the best production solution. Sometimes I focused too much on making something technically perfect when a simpler solution would have been enough. That taught me to ask more questions at the beginning: what is the actual requirement, what is the deadline, what level of quality do we need, and what are the risks? Now I try to balance technical quality with production needs.
+A: One lesson I learned is that a technically perfect solution is not always the best production solution. I’ve had situations where I spent too much time improving something beyond what the task really needed. That taught me to clarify the goal, deadline, and acceptable level of quality earlier, so now I try to balance technical quality with production value.
 
 Q: How do you react to feedback or criticism?
-A: I’m okay with feedback. If it is constructive and connected with the work, I think it is useful. Sometimes another person can see something that I missed. Usually I first try to understand the reason behind the feedback. If I don’t understand something, I ask questions. Then I make the change and try to remember the lesson for the future. I don’t think feedback is something personal.
+A: I’m comfortable with constructive feedback. I first try to understand the reason behind it, and if something is unclear I ask questions. Then I make the change and keep the lesson in mind for future work. I don’t take work feedback personally.
 
 Q: How do you deal with conflict?
-A: I think I’m quite good at dealing with conflict. Usually I prefer to call it a disagreement, because most of the time people just have different priorities. For example, an artist may want the best visual quality, while a developer may be worried about memory or performance. As a Technical Artist, I often work exactly between these two sides. So I try to understand both positions and find a practical compromise. I prefer facts and calm discussion instead of emotional arguments.
+A: I usually see it as a difference in priorities rather than a personal conflict. An artist may care about visual quality, while a developer may care about memory or performance. As a Technical Artist, I often work exactly between those priorities. I try to understand both sides, bring facts where possible, and find a practical compromise.
 
 Q: Do you prefer to work independently or in a team?
-A: I like a mix of both. I enjoy working independently when I need to focus on integration, debugging, or implementation. But I also like teamwork because Technical Art depends a lot on communication. I often need information from artists, developers, designers, or producers. So for me, the best environment is when I have clear ownership of my task but I can communicate freely with the team.
+A: I like a mix of both. I enjoy independent work when I’m integrating, debugging, or implementing something, but Technical Art depends a lot on communication. The best setup for me is clear ownership of my task with easy access to artists, developers, and designers when I need context.
 
 Q: What do you expect from your manager?
-A: Clear priorities, context, and honest feedback. I don’t need someone to control every small step. I’m comfortable working independently. But I like to understand what is important, why it is important, and what result is expected. I also like when a manager gives feedback early instead of waiting until the end.
+A: Clear priorities, context, and honest feedback. I don’t need close supervision, but I do want to understand what is important, why it matters, and what result is expected. Early feedback is also very useful because it prevents rework.
 
 Q: Where do you see yourself in five years?
-A: I would like to be a strong Senior Technical Artist with more responsibility. I want to be able to take a feature or a large part of a pipeline and understand both the artistic and technical side. I would also like to help less experienced people and contribute to improving workflows and standards. Maybe later I could move into some leadership responsibilities, but I don’t want to stop doing hands-on Technical Art. I still want to work directly with Unity, solve technical problems, and stay close to production.
+A: I’d like to be a strong Senior Technical Artist with more ownership over features and pipelines. I’d also like to help less experienced people and improve workflows and standards. I’m open to some leadership responsibility later, but I still want to stay hands-on with Unity and production work.
 
 Q: Why do you like slot games?
-A: Slot games are actually very interesting from a Technical Art point of view. There is a lot of UI, animation, visual feedback, popups, effects, localization, and content updates. You also need to care about performance because the game should work well on many mobile devices. I’ve worked with this type of content for several years, so I understand the production rhythm quite well. That is also one reason why SciPlay feels very relevant to my background.
+A: From a Technical Art point of view, slot games are very interesting because they combine a lot of UI, animation, visual feedback, popups, effects, localization, and frequent content updates. Performance also matters because the game needs to work on many mobile devices. I already know this production rhythm well, so the domain feels very natural to me.
 
 Q: What do you think is important when working on mobile games?
-A: Performance and memory are very important. You can have beautiful art, but if textures are too large, atlases are not organized well, or UI becomes too heavy, the game can suffer on weaker devices. So I think a Technical Artist should always think about both visual quality and technical cost. I prefer to check the real result and profile when possible instead of just assuming that something is optimized.
+A: You need to balance visual quality with memory, loading, and performance. I pay attention to texture sizes, atlases, UI complexity, animation, and rendering cost, but I prefer to measure the real problem instead of assuming. Different devices can behave very differently, so profiling and target-device testing are important.
 
 Q: How strong is your Unity experience?
-A: Unity is one of my main working tools. I’ve used it professionally for several years for asset integration, UI, animations, Spine, atlases, scene setup, and optimization. I also worked with both 2D and 3D content. I’m especially comfortable with UI-heavy projects and content integration because that has been a big part of my work in slot games.
+A: Unity is one of my main production tools. I’ve used it professionally for art and UI integration, animations, Spine, atlases, scene setup, localization support, and optimization work. I’m especially comfortable with UI-heavy projects where I need to take content from artists, prepare it correctly, integrate it, and troubleshoot visual or performance issues.
 
 Q: How strong are you with Photoshop?
-A: I use Photoshop as part of the production workflow. I’m comfortable preparing and adjusting 2D assets, checking sizes, working with layers, and preparing content before it goes into Unity. I don’t position myself as a concept artist or illustrator. My strength is using Photoshop from the Technical Artist side: preparing assets correctly for integration and production.
+A: I use Photoshop regularly as part of the Technical Art production workflow. I’m comfortable preparing and adjusting 2D assets, checking sizes and layers, cleaning up content, and preparing files for Unity integration. I don’t position myself as a concept artist or illustrator — my strength is using Photoshop to make art production-ready and technically suitable for the game.
+
+Q: How do you use Photoshop in a Technical Artist workflow?
+A: Mostly as the step between source art and Unity. I use it to inspect layers, adjust or clean assets, check dimensions, prepare transparent areas, and make sure the file is ready for the way it will be used in the engine. I try to solve asset problems at the right stage — in Photoshop if it is really a source-art issue, or in Unity if it is an import or integration issue.
 
 Q: How do you use AI tools?
-A: I use AI tools quite a lot. Mostly for research, documentation, checking different technical approaches, organizing information, and speeding up repetitive work. For example, if I need to understand a Unity workflow, compare solutions, or prepare a technical checklist, AI can help me do that faster. But I never assume that AI is automatically correct. For important technical information, I verify it against documentation, the project, or actual tests. For me, AI is a productivity tool, not a replacement for technical judgment.
+A: I use AI mostly to speed up research, documentation, technical comparisons, checklists, and repetitive information work. For example, I might use it to compare different Unity approaches, structure a debugging checklist, or organize documentation around a problem. I treat AI as an assistant, not as a source of truth — for important technical decisions I verify the answer against documentation, the project, or an actual test.
+
+Q: Can you give me a practical example of how AI helps your workflow?
+A: A practical example would be when I need to investigate a Unity problem or compare several possible approaches. I can use AI to quickly structure the options, list risks, or build a checklist of what to test. Then I verify the important parts against Unity documentation and the actual project. It saves time on research and organization, but I still make the technical decision myself.
 
 Q: Do you have programming experience?
-A: Yes. Before Technical Art, I worked as a Flash and Flex developer with ActionScript 3. I worked with client-side game logic, existing codebases, client-server systems, MVC, OOP, XML, JSON, and other web and game technologies. I’m not applying as a gameplay programmer now, but this background helps me a lot as a Technical Artist. I can understand code, communicate with developers, and think about technical problems more clearly.
+A: Yes. Before Technical Art, I worked as a Flash and Flex developer with ActionScript 3. I worked with client-side game logic, existing codebases, client-server systems, MVC, OOP, XML, JSON, and related technologies. I’m not applying as a gameplay programmer now, but that background helps me understand code, communicate with developers, and reason about technical problems.
 
 Q: How comfortable are you with C#?
-A: I’m not positioning myself as a full-time C# developer, but I can work with scripts when Technical Art tasks require it. My programming background helps me understand code structure and logic, and I’ve also implemented custom scripts in Unity projects from my portfolio. For this role, I see C# as an additional Technical Artist tool rather than my main specialization.
+A: I’m not positioning myself as a full-time C# developer, but I can work with scripts when a Technical Art task requires it. My programming background helps me understand code structure and logic, and I’ve also implemented custom scripts in Unity projects from my portfolio. I see C# as an additional Technical Artist tool rather than my main specialization.
 
 Q: What do you do when you don’t know how to solve something?
-A: First, I try to define exactly what I don’t know. Then I check documentation, examples in the project, previous solutions, or ask someone who has more context. If possible, I make a small test. I’m okay saying, “I don’t know yet.” For me, the important thing is not pretending to know everything. The important thing is how quickly and correctly I can find the answer.
+A: First, I define exactly what I don’t know. Then I check documentation, examples in the project, previous solutions, or ask someone who has more context. If possible, I make a small test. I’m completely fine saying, “I don’t know yet.” The important thing is how quickly and correctly I can find the answer.
 
 Q: How do you handle stress?
-A: I try to make the situation more structured. If there are many urgent tasks, I first clarify what is really the highest priority. Then I split the work into smaller parts and focus on one thing at a time. I also communicate early if I see a risk or if something can take longer. For me, unclear priorities create more stress than hard work. If the plan is clear, I’m usually calm.
+A: I try to make the situation more structured. I clarify the real priority, split the work into smaller parts, and communicate early if I see a risk or a delay. Hard work itself doesn’t bother me as much as unclear priorities, so structure helps me stay calm.
 
 Q: How do you feel about overtime?
-A: I understand that in game development there can sometimes be important deadlines or production situations where extra effort is needed. I’m flexible in those situations. At the same time, I think overtime should be an exception, not a normal permanent process. Good planning and communication are better for the team in the long term.
+A: I understand that game development can sometimes have exceptional deadlines or production issues, and I can be flexible in those situations. At the same time, I think regular overtime should not be the default way of working. Good planning and communication are healthier for the team long-term.
 
 Q: Would working on weekends be a problem?
-A: If there is an exceptional production situation, I can be flexible. I would also like to understand how often weekend work normally happens in the team, because I think it is important to have clear expectations on both sides.
+A: For an exceptional production situation, I can be flexible. I’d just like to understand how often weekend work normally happens in the team, so expectations are clear on both sides.
 
 Q: This role may require office work when needed. Is that okay?
-A: Yes, I’m open to discussing the working format and coming to the office when needed. I would just like to understand what the normal schedule and expectations are for the team.
+A: Yes, I’m open to coming to the office when needed. I’d just like to understand the normal schedule and what “when needed” usually means for the team.
 
 Q: What is important to you in a company?
-A: For me, the most important things are interesting work, professional growth, and good communication. I want to work with people I can learn from. I also like when I have clear responsibility and can see the result of my work in the product. And I value a team where people can discuss problems openly instead of hiding them.
+A: Interesting work, professional growth, clear responsibility, and good communication. I want to work with people I can learn from, and I like a team where problems can be discussed openly and solved directly.
 
 Q: How would your colleagues describe you?
-A: I think they would say I’m responsible, calm, and reliable. I try to help when I can, and I don’t like leaving tasks half-finished. I also ask questions when something is unclear because I prefer to understand the real requirement before doing the work. And I think they would say that I’m quite technical for a Technical Artist because of my development background.
+A: I think they would say I’m responsible, calm, and reliable. I try to finish what I start, I ask questions when requirements are unclear, and I’m usually comfortable with the technical side of discussions because of my development background.
 
 Q: What are your salary expectations?
-A: I’m open to discussing the range based on the full responsibilities and total package. For me, the role itself, the team, and the growth opportunity are very important. At the same time, of course, I’m looking for compensation that matches my experience and the market. If you can share the budgeted range for the position, I’d be happy to discuss it.
+A: I’m open to discussing the range based on the full responsibilities and total package. I’m looking for compensation that matches my experience and the market. If you can share the budgeted range for the role, I’d be happy to discuss it from there.
 
 Q: How comfortable are you working in English?
-A: I can communicate in English about work and technical topics. Of course, I’m still improving my spoken English, so sometimes I may ask someone to repeat or explain something in a different way. But I’m not afraid to speak. I think the important thing is to communicate clearly and keep improving.
+A: I can work in English on technical and production topics. I’m still improving my spoken fluency, but I’m comfortable asking questions, explaining technical issues, and clarifying details when something is ambiguous. My focus is always on making sure the communication is clear.
 
 Q: What is your educational background?
-A: I graduated from Ukrainian State University of Chemical Technology. My specialization was automation of production, so my background is engineering. I think that helped me develop a structured and technical way of thinking, which later became useful in programming and Technical Art.
+A: I graduated from Ukrainian State University of Chemical Technology with a specialization in automation of production. My background is engineering, and I think that helped me develop the structured technical thinking that later became useful in programming and Technical Art.
 
 Q: What was your major?
-A: My specialization was automation of production at Ukrainian State University of Chemical Technology. My background is engineering, and I think it helped me develop the structured technical thinking that I later used in programming and Technical Art.
+A: My specialization was automation of production at Ukrainian State University of Chemical Technology. It gave me an engineering and systems-thinking background that later helped me in programming and Technical Art.
 
 Q: Why do you want to work in games?
-A: I like games because the work combines technology, visuals, design, and user experience. As a Technical Artist, I can work in the middle of all of those areas. I also enjoy seeing a feature become something real that players can interact with. That is much more motivating to me than working on something where I never see the final product.
+A: I like games because the work combines technology, visuals, design, and user experience. As a Technical Artist I can work in the middle of all of those areas, and I enjoy seeing a feature become something real that players can interact with.
 
 Q: What do you like about being a Technical Artist?
-A: I like that Technical Art combines creativity with technical problem-solving. I can work with visual content, but I also get to understand how it works inside Unity, how it affects performance, and how to make the workflow better for the team. I especially like being the link between artists and developers.
+A: I like that Technical Art combines creative work with technical problem-solving. I can work with visual content, but I also get to think about how it behaves in Unity, how it affects performance, and how the workflow can be improved for the team.
 
 Q: How do you work with artists and developers?
-A: I usually try to understand both sides. With artists, I discuss the visual goal and what they need from the final result. With developers, I discuss technical constraints, integration, performance, and how the feature should behave. My job is often to find a practical solution that keeps the visual quality but also works correctly in production.
+A: With artists, I focus on the visual goal and what the content needs to achieve. With developers, I discuss integration, technical constraints, performance, and behavior. My job is often to connect those two sides and find a solution that keeps the visual quality without creating unnecessary technical problems.
 
 Q: How do you approach optimization?
-A: I don’t like optimizing only by intuition. First I try to understand what the actual problem is: memory, texture size, UI batching, rendering, loading, or something else. Then I make a focused change and check the result. In mobile projects this is especially important because different devices can behave very differently.
+A: I start by identifying the real bottleneck instead of optimizing by intuition. It might be texture memory, UI batching, rendering, loading, or something else. Then I make a focused change and measure the result. On mobile, I also try to validate on the target device because Editor behavior can be misleading.
 
 Q: What is your experience with UI?
-A: UI has been a big part of my Technical Artist work. I’ve created and integrated UI screens and popups, implemented UI animations and transitions, worked with localization, and supported UI-heavy slot projects. I’m comfortable taking visual content from artists and preparing it for stable use inside Unity.
+A: UI has been a major part of my Technical Artist work. I’ve created and integrated screens and popups, implemented UI animations and transitions, worked with localization, and supported UI-heavy slot projects. I’m comfortable taking visual content from artists and turning it into a stable, usable Unity setup.
+
+Q: How would you troubleshoot a UI screen that looks correct but performs badly?
+A: First I would reproduce the problem on the target device if possible and profile before changing anything. Then I’d separate the possible causes — texture memory, UI batching, overdraw, layout rebuilds, animation, or something else. I’d make one focused change, measure again, and only keep the change if it actually improves the result.
 
 Q: What is your experience with animation?
-A: I’ve worked with different kinds of animation in Unity projects: popup animations, UI transitions, tween animations, Spine integration and editing, and imported animations. In several roles, animation integration was a regular part of my work, so I’m comfortable both with the visual side and with the technical setup inside Unity.
+A: I’ve worked with popup animations, UI transitions, tween animations, Spine integration and editing, and imported animations. Animation integration has been a regular part of my work, so I’m comfortable both with the visual setup and with making sure it fits the technical needs of the feature.
 
 Q: What is your experience with Spine?
-A: I have practical experience integrating and editing Spine animations in Unity. I worked with Spine in several game projects, especially slot games, where character and UI-related animations were part of regular production. I’m comfortable with the integration workflow and with preparing the result for the game.
+A: I have practical experience integrating and editing Spine animations in Unity, especially on slot projects where character and UI-related animations were part of regular production. I’m comfortable with the integration workflow and with preparing the result for use in the game.
 
 Q: What is your experience with atlases?
-A: I have strong practical experience with atlases. In several companies I assembled and optimized atlases for production and mobile builds. I think about both visual quality and memory or performance cost, because atlas setup can directly affect the final build.
+A: I’ve assembled and optimized atlases for production and mobile builds. I think about grouping, visual quality, memory, and rendering cost instead of treating atlas creation as just a packing step. If I change atlas organization for performance reasons, I prefer to verify the result rather than assume it helped.
+
+Q: How would you integrate a new 2D asset into Unity?
+A: I’d first understand how the asset will be used: UI, Sprite Renderer, sliced panel, animation, or something else. Then I’d check the import settings, dimensions, alpha, compression, and platform overrides, and make sure the Sprite setup matches the intended use. After integration I’d verify the result visually and, if it is performance-sensitive, check memory or rendering impact as well.
+
+Q: What is your experience with visual effects?
+A: My strongest experience is in UI, animation, Spine, and integration, but I’m also comfortable supporting visual effects inside Unity as part of a feature. I approach VFX from the Technical Art side: integration, visual consistency, performance awareness, and making sure the effect works correctly with the rest of the content. I would not present myself as a dedicated VFX specialist.
 
 Q: What is your experience with live projects?
-A: I’m comfortable working on live projects and ongoing feature updates. I understand that in a live product you need to be careful with changes because you are not working in isolation; existing systems, players, performance, localization, and deadlines all matter. I like this environment because the result is real and you can see the impact of your work.
+A: I’m comfortable with live projects and ongoing feature updates. I understand that changes have to fit existing systems, localization, performance limits, deadlines, and the needs of real players. I like this environment because the impact of the work is very visible.
 
 Q: Do you have experience with localization?
-A: Yes. I worked with localization integration in several projects, including slot games. This included integrating localized content and supporting UI or visual systems that had to work correctly across multiple languages.
+A: Yes. I’ve worked with localization integration on several projects, including slot games. That included supporting UI and visual content that needed to work correctly across multiple languages and making sure the layout still behaved properly with localized content.
+
+Q: How do you handle a disagreement between an artist and a developer?
+A: I try to separate the visual goal from the technical constraint. First I make sure I understand what the artist is trying to preserve and what the developer is trying to protect — for example memory, performance, or maintainability. Then I look for a compromise that keeps the important visual part without creating unnecessary technical cost. If possible, I prefer to use a quick test or profiler data instead of arguing from opinion.
+
+Q: How do you work when requirements change during production?
+A: First I clarify what actually changed and whether it affects the technical setup, the art, or both. Then I check what can be reused and what really needs to be redone. I also communicate the impact early, because hidden rework is worse than a clear estimate. My goal is to adapt without creating unnecessary instability.
+
+Q: How do you know when a feature is ready to hand off?
+A: I want the visual result to match the requirement, the Unity setup to be clean and understandable, and the feature to work correctly in the expected states. If performance matters, I also want to know that the change didn’t introduce an obvious regression. I prefer handing off something that another person can understand and continue working with.
 
 Q: Do you have any questions for me?
-A: Yes, thank you. I have a few. How is the Technical Art team structured at SciPlay? What would be the main responsibilities for this role during the first three months? How much of the work is focused on UI and 2D content? How much responsibility does the Technical Artist have for optimization? How closely does the Technical Artist work with developers and artists every day? What kind of problems does the team currently expect this person to help solve? How does SciPlay use AI tools today? What would success look like in this role after six months? And what are the next steps in the interview process?
-
-Q: Do you have any questions for us?
-A: Yes, thank you. I have a few. How is the Technical Art team structured at SciPlay? What would be the main responsibilities for this role during the first three months? How much of the work is focused on UI and 2D content? How much responsibility does the Technical Artist have for optimization? How closely does the Technical Artist work with developers and artists every day? What kind of problems does the team currently expect this person to help solve? How does SciPlay use AI tools today? What would success look like in this role after six months? And what are the next steps in the interview process?
+A: Yes, thank you. I’d like to understand how the Technical Art team is structured, what the main responsibilities would be during the first three months, and what kind of problems you expect this person to solve most often. I’d also be interested to hear how closely the role works with artists and developers day to day.
 
 Q: Is there anything else you would like to add?
-A: I think the main thing I would add is that this role feels very close to my real experience. I already have a strong background in Unity Technical Art, slot games, UI, animations, atlases, optimization, and collaboration with artists and developers. At the same time, I’m still very motivated to grow, so I see SciPlay as a place where I could both contribute and learn.
+A: I’d just add that this role feels very close to my real experience. I already have a strong background in Unity Technical Art, slot games, UI, animation, atlases, optimization, and cross-team work. At the same time, I’m still motivated to grow, so I see SciPlay as a place where I could contribute quickly and continue developing.
 
 Q: Thank you, Igor. It was nice speaking with you.
-A: Thank you very much for your time. I really enjoyed the conversation. The role sounds very close to my experience and also like a good opportunity for me to grow. I especially like the combination of Unity, UI, art integration, optimization, and working with a live mobile product. I’d be very happy to continue with the next stage. Have a great day!
+A: Thank you very much for your time. I really enjoyed the conversation. The role sounds very close to my experience, especially the combination of Unity, UI, art integration, optimization, and live mobile production. I’d be very happy to continue with the next stage. Have a great day!
