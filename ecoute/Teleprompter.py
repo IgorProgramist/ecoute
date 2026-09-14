@@ -30,6 +30,8 @@ class Teleprompter(tk.Canvas):
         self._paused = False
         self._after_id = None
         self._last_t = 0.0
+        self._last_toggle = 0.0
+        self._start_global_pause()
         # пауза тільки на Ctrl (лівий/правий)
         self.bind_all("<Control_L>", lambda e: self.toggle_pause())
         self.bind_all("<Control_R>", lambda e: self.toggle_pause())
@@ -78,7 +80,28 @@ class Teleprompter(tk.Canvas):
         # пропустити поточний текст
         self.hide()
 
+    def _start_global_pause(self):
+        """Глобальний хук: Ctrl працює навіть коли вікно суфлера не в фокусі."""
+        def _cb(event):
+            name = (event.name or "").lower()
+            if "ctrl" in name:
+                try:
+                    self.after(0, self.toggle_pause)
+                except Exception:
+                    pass
+        try:
+            import keyboard
+            keyboard.on_press(_cb)
+            print("[INFO] global pause hotkey armed: Ctrl (works anywhere)")
+        except Exception as e:
+            print(f"[WARN] global Ctrl pause unavailable ({e}); pause works only when window focused")
+
     def toggle_pause(self):
+        # захист від повторів при зажатому Ctrl
+        now = time.monotonic()
+        if now - self._last_toggle < 0.3:
+            return
+        self._last_toggle = now
         if not self._label.cget("text") or self._win is None:
             return
         if self._paused:
