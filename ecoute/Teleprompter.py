@@ -7,8 +7,9 @@ CHROMA = config.TRANSPARENT_COLOR
 LEFT_MARGIN = 80
 
 # --- СУФЛЕР-РЕЖИМ: стрічка їде справа-наліво ---
-SCROLL_SPEED_PX_S = 170   # основна швидкість читання, пікселів/секунду
+SCROLL_SPEED_PX_S = 170   # швидкість читання, пікселів/секунду
 ENTRY_SPEED_PX_S = 500    # швидкість заїзду тексту справа до точки читання
+START_HOLD_S = 0.6        # скільки стрічка стоїть на точці читання перед рухом
 
 
 class Teleprompter(tk.Canvas):
@@ -31,6 +32,7 @@ class Teleprompter(tk.Canvas):
         self._paused = False
         self._after_id = None
         self._last_t = 0.0
+        self._landed_at = 0.0
         self._last_toggle = 0.0
         self._start_global_pause()
         # пауза тільки на Ctrl (лівий/правий)
@@ -126,9 +128,15 @@ class Teleprompter(tk.Canvas):
         dt = min(now - self._last_t, 0.1)
         self._last_t = now
 
-        # швидкий заїзд справа до точки читання, потім звичайна швидкість
-        if self._x > LEFT_MARGIN:
+        # точка читання = СЕРЕДИНА вікна: заїзд швидко до середини,
+        # коротко стоїть, потім їде у темпі читання
+        reading_x = (self.winfo_width() or 1000) / 2
+        if self._x > reading_x:
             self._x -= ENTRY_SPEED_PX_S * dt
+            if self._x <= reading_x:
+                self._landed_at = now
+        elif now - self._landed_at < START_HOLD_S:
+            pass  # стоїть на точці читання
         else:
             self._x -= SCROLL_SPEED_PX_S * dt
 
