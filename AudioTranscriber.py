@@ -27,6 +27,7 @@ class AudioTranscriber:
                 "last_spoken": None,
                 "new_phrase": True,
                 "phrase_text": "",
+                "phrase_epoch": 0,
                 "process_data_func": self.process_mic_data
             },
             "Speaker": {
@@ -37,6 +38,7 @@ class AudioTranscriber:
                 "last_spoken": None,
                 "new_phrase": True,
                 "phrase_text": "",
+                "phrase_epoch": 0,
                 "process_data_func": self.process_speaker_data
             }
         }
@@ -152,6 +154,7 @@ class AudioTranscriber:
         if source_info["new_phrase"] or len(transcript) == 0:
             # нова фраза — накопичення тексту починається заново
             source_info["phrase_text"] = text
+            source_info["phrase_epoch"] = source_info["phrase_epoch"] + 1
             if len(transcript) > MAX_PHRASES:
                 transcript.pop(-1)
             transcript.insert(0, (f"{who_spoke}: [{text}]\n\n", time_spoken))
@@ -161,6 +164,7 @@ class AudioTranscriber:
                 # попереднє речення вже ЗАВЕРШЕНЕ (пунктуація в кінці) —
                 # новий шматок це НОВЕ питання, не продовження
                 source_info["phrase_text"] = text
+                source_info["phrase_epoch"] = source_info["phrase_epoch"] + 1
                 if len(transcript) > MAX_PHRASES:
                     transcript.pop(-1)
                 transcript.insert(0, (f"{who_spoke}: [{text}]\n\n", time_spoken))
@@ -173,6 +177,10 @@ class AudioTranscriber:
     def get_current_speaker_phrase(self):
         """Повний накопичений текст поточної фрази спікера (питання)."""
         return self.audio_sources["Speaker"]["phrase_text"].strip()
+
+    def get_speaker_phrase_epoch(self):
+        """Номер генерації фрази: змінюється щоразу, коли починається нове питання."""
+        return self.audio_sources["Speaker"]["phrase_epoch"]
 
     def get_transcript(self):
         combined_transcript = list(merge(

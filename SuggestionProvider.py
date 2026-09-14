@@ -10,8 +10,8 @@ import config
 BASE_URL = "https://opencode.ai/zen/go/v1"
 
 QUESTION_SETTLE_S = 2.2   # (не використовується)
-QUESTION_FAST_S = 2.0     # "?" + стабільність 2с = питання завершене (при живому мовленні шматки приходять частіше ніж кожні 2с — тому "?" на частковому шматку не спрацює)
-QUESTION_FALLBACK_S = 2.5 # без "?": чекаємо мовчання 2.5с (Whisper ставить крапки всюди, крапка = ненадійний сигнал)
+QUESTION_STABLE_S = 2.0    # питання мовчить 2с → вважаємо завершеним
+REFIRE_MIN_NEW_WORDS = 4   # повторний показ тільки якщо питання виросло на 4+ слів (Whisper ставить крапки всюди, крапка = ненадійний сигнал)
 
 SYSTEM_PROMPT_TEMPLATE = (
     "You are helping a candidate during a live technical job interview (Unity / Technical Artist role). "
@@ -62,6 +62,7 @@ class SuggestionProvider:
         self._q_changed_at = 0.0
         self._fired_for_q = False
         self._last_fired_text = None
+        self._last_epoch = None
         self.prepared = load_prepared_answers()
         self.prepared_norm = [(q, a, _normalize(q)) for q, a in self.prepared]
         if self.enabled:
@@ -95,11 +96,16 @@ class SuggestionProvider:
                 return line[len("Speaker:"):].strip().strip("[]").strip()
         return None
 
-    def maybe_update(self, question, display, speaker_ts=None):
+    def maybe_update(self, question, display, phrase_epoch=None):
         question = (question or "").strip()
         if not question:
             return
         now = time.time()
+
+        if phrase_epoch is not None and phrase_epoch != self._last_epoch:
+            # нове питання (нова фраза) — дозволяємо показ заново
+            self._last_epoch = phrase_epoch
+            self._last_fired_text = None
 
         if question != self.last_question:
             # питання ще договорюється — запам'ятати час останньої зміни
@@ -108,14 +114,16 @@ class SuggestionProvider:
             return
 
         stable_s = now - self._q_changed_at
-        ends_question = question.rstrip(' "\'')[-1:] == "?"
-        # "?" — надійний сигнал завершення питання; крапка/оклик ненадійні,
-        # бо Whisper ставить їх у кінці КОЖНОГО шматка посеред питання
-        if not ((ends_question and stable_s >= QUESTION_FAST_S) or stable_s >= QUESTION_FALLBACK_S):
+        if stable_s < QUESTION_STABLE_S:
             return  # питання ще не дозріло — НЕ відповідаємо на частину
 
-        if question == self._last_fired_text:
-            return  # цей текст уже обробляли
+        # повторний показ тільки коли питання РЕАЛЬНО виросло
+        # (дрібні шматки/повтори від whisper не рестартують стрічку)
+        if self._last_fired_text is not None:
+            old_n = len(self._last_fired_text.split())
+            new_n = len(question.split())
+            if new_n - old_n < REFIRE_MIN_NEW_WORDS:
+                return
         self._last_fired_text = question
         print(f"[MATCH] question complete ({stable_s:.1f}s stable): {question[:90]}")
 
