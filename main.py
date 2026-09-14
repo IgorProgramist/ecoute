@@ -16,13 +16,58 @@ from SuggestionProvider import SuggestionProvider, load_api_key
 CHROMA = config.TRANSPARENT_COLOR
 
 
-def update_transcript_UI(transcriber, display, suggestion_provider):
+class IdleGate:
+    """Суфлер спить, поки ти не натиснеш ENTER у консолі.
+
+    Поки інтерв'ю українською — стрічка нічого не показує.
+    ENTER = перейти в англійський режим (активувати суфлер).
+    Другий ENTER = знову в очікування.
+    При активації ВСЕ почуте раніше стирається — реагуємо
+    тільки на те, що прозвучить ПІСЛЯ ENTER.
+    """
+
+    def __init__(self):
+        self.active = False
+        self.transcriber = None
+        self.provider = None
+
+    def _reset_history(self):
+        if self.transcriber is not None:
+            self.transcriber.transcript_data["Speaker"].clear()
+        if self.provider is not None:
+            self.provider.last_question = None
+            self.provider.last_ts = None
+            self.provider.last_shown_answer = None
+
+    def start(self, display, transcriber, provider):
+        self.transcriber = transcriber
+        self.provider = provider
+
+        def watch():
+            while True:
+                input()
+                self.active = not self.active
+                if self.active:
+                    # стираємо почуте ДО активації
+                    self._reset_history()
+                    print("[CONTROL] ENTER -> АНГЛІЙСЬКИЙ РЕЖИМ АКТИВНИЙ (слухаю тільки нове)")
+                else:
+                    print("[CONTROL] ENTER -> ОЧІКУВАННЯ (суфлер спить, нічого не показує)")
+                    try:
+                        display.after(0, display.hide)
+                    except Exception:
+                        pass
+        threading.Thread(target=watch, daemon=True).start()
+
+
+def update_transcript_UI(transcriber, display, suggestion_provider, gate):
     # суфлер: стрічка залежить тільки від питань спікера, не від твоїх слів
     display.sync("")
-    suggestion_provider.maybe_update(
-        transcriber.get_transcript(), display, transcriber.get_latest_speaker_ts()
-    )
-    display.after(100, update_transcript_UI, transcriber, display, suggestion_provider)
+    if gate.active:
+        suggestion_provider.maybe_update(
+            transcriber.get_transcript(), display, transcriber.get_latest_speaker_ts()
+        )
+    display.after(100, update_transcript_UI, transcriber, display, suggestion_provider, gate)
 
 
 def main():
@@ -79,11 +124,17 @@ def main():
 
     display = Teleprompter(root, height=160)
     display.pack(fill="both", expand=True)
-    display.start("ready — speak and your answer will appear here (click = next words, ESC = exit)")
+    display.hide()
+
+    gate = IdleGate()
+    gate.start(display, transcriber, suggestion_provider)
+    print("[CONTROL] РЕЖИМ ОЧІКУВАННЯ: стрічка нічого не показує.")
+    print("[CONTROL] Натисни ENTER у консолі, коли інтерв'ю перейде на англійську.")
+    print("[CONTROL] Наступний ENTER поверне в очікування.")
 
     print("READY")
 
-    update_transcript_UI(transcriber, display, suggestion_provider)
+    update_transcript_UI(transcriber, display, suggestion_provider, gate)
 
     root.mainloop()
 

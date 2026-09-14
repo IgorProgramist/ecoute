@@ -5,10 +5,9 @@ import config
 
 CHROMA = config.TRANSPARENT_COLOR
 LEFT_MARGIN = 80
-TAIL_EXTRA_WORDS = 8   # слова за правим краєм, які заїжджають при зсуві
 
 # --- СУФЛЕР-РЕЖИМ: стрічка їде справа-наліво ПОСТІЙНО ---
-SCROLL_SPEED_PX_S = 140  # швидкість руху стрічки, пікселів/секунду
+SCROLL_SPEED_PX_S = 160  # швидкість руху стрічки, пікселів/секунду
 
 
 class Teleprompter(tk.Canvas):
@@ -25,17 +24,15 @@ class Teleprompter(tk.Canvas):
         )
         self._font = tkfont.Font(font=self._label.cget("font"))
         self._win = None
-        self._words = []
-        self._idx = 0
+        self._current_text = None
         self._x = float(LEFT_MARGIN)
         self._scrolling = False
+        self._paused = False
         self._after_id = None
         self._last_t = 0.0
-        self.bind("<Button-1>", self._on_click)
-
-    def _on_click(self, e):
-        self.focus_set()
-        self.advance()
+        # пауза тільки на Ctrl (лівий/правий)
+        self.bind_all("<Control_L>", lambda e: self.toggle_pause())
+        self.bind_all("<Control_R>", lambda e: self.toggle_pause())
 
     def _safe_height(self):
         h = self.winfo_height()
@@ -44,13 +41,17 @@ class Teleprompter(tk.Canvas):
     # ---------- public ----------
     def start(self, text):
         """Показати новий текст у стрічці і поїхати справа-наліво."""
-        self._cancel()
-        self._words = text.split()
-        self._idx = 0
-        if not self._words:
+        text = (text or "").strip()
+        if not text:
+            self.hide()
             return
-        full = " ".join(self._words)
-        self._label.config(text=full)
+        # той самий текст уже їде стрічкою — не перезапускаємо заново
+        if text == self._current_text and (self._scrolling or self._paused):
+            return
+        self._cancel()
+        self._paused = False
+        self._current_text = text
+        self._label.config(text=text)
         h = self._safe_height()
         if self._win is None:
             self._win = self.create_window(0, h // 2, window=self._label, anchor="w")
@@ -60,13 +61,36 @@ class Teleprompter(tk.Canvas):
         self._last_t = time.monotonic()
         self._scroll_frame()
 
+    def hide(self):
+        """Приховати стрічку (порожньо = вікно прозоре і невидиме)."""
+        self._cancel()
+        self._paused = False
+        self._current_text = None
+        if self._win:
+            self.coords(self._win, self.winfo_width() or 1000, self._safe_height() // 2)
+        self._label.config(text="")
+
     def sync(self, you_text):
         # суфлер-режим: sync нічого не робить, стрічка їде сама
         pass
 
     def advance(self):
-        # клік = пропустити до кінця поточного тексту (показати "ready")
-        self.start("ready — new answer will appear here when the interviewer speaks (click = skip, ESC = exit)")
+        # пропустити поточний текст
+        self.hide()
+
+    def toggle_pause(self):
+        if not self._label.cget("text") or self._win is None:
+            return
+        if self._paused:
+            self._paused = False
+            self._scrolling = True
+            self._last_t = time.monotonic()
+            self._scroll_frame()
+            print("[PROMPT] resumed")
+        else:
+            self._paused = True
+            self._scrolling = False
+            print("[PROMPT] paused")
 
     # ---------- internal ----------
     def _scroll_frame(self):
@@ -78,20 +102,13 @@ class Teleprompter(tk.Canvas):
         self._x -= SCROLL_SPEED_PX_S * dt
 
         text_w = self._font.measure(self._label.cget("text"))
-        # коли текст повністю виїхав за лівий край — зупиняємось
+        # коли текст повністю виїхав за лівий край — ховаємо стрічку
         if self._x + text_w < 0:
-            self._stop_scrolling()
+            self.hide()
             return
 
         self.coords(self._win, self._x, self._safe_height() // 2)
         self._after_id = self.after(15, self._scroll_frame)
-
-    def _stop_scrolling(self):
-        self._scrolling = False
-        self._words = []
-        if self._win:
-            self.coords(self._win, self.winfo_width(), self._safe_height() // 2)
-            self._label.config(text="")
 
     def _cancel(self):
         self._scrolling = False

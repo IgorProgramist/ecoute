@@ -53,6 +53,7 @@ class SuggestionProvider:
         self.last_question = None
         self.last_ts = None
         self.busy = False
+        self.last_shown_answer = None  # щоб та сама відповідь не перезапускала стрічку
         self.prepared = load_prepared_answers()
         self.prepared_norm = [(q, a, _normalize(q)) for q, a in self.prepared]
         if self.enabled:
@@ -100,6 +101,8 @@ class SuggestionProvider:
 
         prepared = self._best_prepared(question)
         if prepared is not None:
+            if prepared[1] == self.last_shown_answer:
+                return  # та сама відповідь вже показувалась — не рестартуємо стрічку
             self._set_text(display, prepared[1])
             return
 
@@ -135,6 +138,7 @@ class SuggestionProvider:
         self._set_text(display, answer)
 
     def _set_text(self, display, text):
+        self.last_shown_answer = text
         text = text.replace("\n", "   ")
         try:
             display.after(0, display.start, text)
