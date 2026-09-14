@@ -68,7 +68,8 @@ def update_transcript_UI(transcriber, display, suggestion_provider, gate):
     display.sync("")
     if gate.active:
         suggestion_provider.maybe_update(
-            transcriber.get_current_speaker_phrase(), display
+            transcriber.get_current_speaker_phrase(), display,
+            transcriber.get_speaker_phrase_epoch()
         )
     display.after(100, update_transcript_UI, transcriber, display, suggestion_provider, gate)
 
