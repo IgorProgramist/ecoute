@@ -34,10 +34,13 @@ class IdleGate:
     def _reset_history(self):
         if self.transcriber is not None:
             self.transcriber.transcript_data["Speaker"].clear()
+            self.transcriber.audio_sources["Speaker"]["phrase_text"] = ""
+            self.transcriber.audio_sources["Speaker"]["new_phrase"] = True
         if self.provider is not None:
             self.provider.last_question = None
             self.provider.last_ts = None
             self.provider.last_shown_answer = None
+            self.provider._last_fired_text = None
 
     def start(self, display, transcriber, provider):
         self.transcriber = transcriber
@@ -65,7 +68,7 @@ def update_transcript_UI(transcriber, display, suggestion_provider, gate):
     display.sync("")
     if gate.active:
         suggestion_provider.maybe_update(
-            transcriber.get_transcript(), display, transcriber.get_latest_speaker_ts()
+            transcriber.get_current_speaker_phrase(), display
         )
     display.after(100, update_transcript_UI, transcriber, display, suggestion_provider, gate)
 

@@ -1,12 +1,17 @@
 import difflib
 import re
 import threading
+import time
 import uuid
 from openai import OpenAI
 
 import config
 
 BASE_URL = "https://opencode.ai/zen/go/v1"
+
+QUESTION_SETTLE_S = 2.2   # (не використовується)
+QUESTION_FAST_S = 0.8     # питання закінчується на "?" і стабільне 0.8с — відповідаємо
+QUESTION_FALLBACK_S = 2.5 # без "?": чекаємо мовчання 2.5с (Whisper ставить крапки всюди, крапка = ненадійний сигнал)
 
 SYSTEM_PROMPT_TEMPLATE = (
     "You are helping a candidate during a live technical job interview (Unity / Technical Artist role). "
@@ -54,6 +59,9 @@ class SuggestionProvider:
         self.last_ts = None
         self.busy = False
         self.last_shown_answer = None  # щоб та сама відповідь не перезапускала стрічку
+        self._q_changed_at = 0.0
+        self._fired_for_q = False
+        self._last_fired_text = None
         self.prepared = load_prepared_answers()
         self.prepared_norm = [(q, a, _normalize(q)) for q, a in self.prepared]
         if self.enabled:
@@ -87,17 +95,29 @@ class SuggestionProvider:
                 return line[len("Speaker:"):].strip().strip("[]").strip()
         return None
 
-    def maybe_update(self, transcript, display, speaker_ts=None):
-        if self.busy:
-            return
-        question = self._extract_speaker_text(transcript)
+    def maybe_update(self, question, display, speaker_ts=None):
+        question = (question or "").strip()
         if not question:
             return
-        is_new_phrase = speaker_ts is not None and speaker_ts != self.last_ts
-        if question == self.last_question and not is_new_phrase:
+        now = time.time()
+
+        if question != self.last_question:
+            # питання ще договорюється — запам'ятати час останньої зміни
+            self.last_question = question
+            self._q_changed_at = now
             return
-        self.last_ts = speaker_ts
-        self.last_question = question
+
+        stable_s = now - self._q_changed_at
+        ends_question = question.rstrip(' "\'')[-1:] == "?"
+        # "?" — надійний сигнал завершення питання; крапка/оклик ненадійні,
+        # бо Whisper ставить їх у кінці КОЖНОГО шматка посеред питання
+        if not ((ends_question and stable_s >= QUESTION_FAST_S) or stable_s >= QUESTION_FALLBACK_S):
+            return  # питання ще не дозріло — НЕ відповідаємо на частину
+
+        if question == self._last_fired_text:
+            return  # цей текст уже обробляли
+        self._last_fired_text = question
+        print(f"[MATCH] question complete ({stable_s:.1f}s stable): {question[:90]}")
 
         prepared = self._best_prepared(question)
         if prepared is not None:
@@ -107,11 +127,13 @@ class SuggestionProvider:
             return
 
         if not self.enabled:
-            self._set_text(display, "no prepared answer matched; AI disabled")
-            return
+            return  # збігу немає, AI вимкнений — нічого не показуємо
 
+        if self.busy:
+            return
         self.busy = True
-        self._set_text(display, "generating answer...")
+        # НЕ показуємо "generating answer..." — стрічка мовчить, поки
+        # відповідь реально не готова (без миготіння)
         threading.Thread(target=self._fetch, args=(question, display), daemon=True).start()
 
     def _fetch(self, question, display):

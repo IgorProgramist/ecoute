@@ -26,6 +26,7 @@ class AudioTranscriber:
                 "last_sample": bytes(),
                 "last_spoken": None,
                 "new_phrase": True,
+                "phrase_text": "",
                 "process_data_func": self.process_mic_data
             },
             "Speaker": {
@@ -35,6 +36,7 @@ class AudioTranscriber:
                 "last_sample": bytes(),
                 "last_spoken": None,
                 "new_phrase": True,
+                "phrase_text": "",
                 "process_data_func": self.process_speaker_data
             }
         }
@@ -148,11 +150,20 @@ class AudioTranscriber:
         transcript = self.transcript_data[who_spoke]
 
         if source_info["new_phrase"] or len(transcript) == 0:
+            # нова фраза — накопичення тексту починається заново
+            source_info["phrase_text"] = text
             if len(transcript) > MAX_PHRASES:
                 transcript.pop(-1)
             transcript.insert(0, (f"{who_spoke}: [{text}]\n\n", time_spoken))
         else:
-            transcript[0] = (f"{who_spoke}: [{text}]\n\n", time_spoken)
+            # продовження фрази: довге питання приходить у кількох шматках —
+            # ДОПИСУЄМО, а не перезаписуємо
+            source_info["phrase_text"] = (source_info["phrase_text"] + " " + text).strip()
+            transcript[0] = (f"{who_spoke}: [{source_info['phrase_text']}]\n\n", time_spoken)
+
+    def get_current_speaker_phrase(self):
+        """Повний накопичений текст поточної фрази спікера (питання)."""
+        return self.audio_sources["Speaker"]["phrase_text"].strip()
 
     def get_transcript(self):
         combined_transcript = list(merge(
@@ -180,3 +191,6 @@ class AudioTranscriber:
 
         self.audio_sources["You"]["new_phrase"] = True
         self.audio_sources["Speaker"]["new_phrase"] = True
+
+        self.audio_sources["You"]["phrase_text"] = ""
+        self.audio_sources["Speaker"]["phrase_text"] = ""
