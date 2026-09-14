@@ -17,13 +17,8 @@ CHROMA = config.TRANSPARENT_COLOR
 
 
 def update_transcript_UI(transcriber, display, suggestion_provider):
-    recent_you = transcriber.get_recent_you_text(12)
-    you_text = " ".join(
-        line[len("You:"):].strip().strip("[]").strip()
-        for line in recent_you.splitlines()
-        if line.startswith("You:")
-    )
-    display.sync(you_text)
+    # суфлер: стрічка залежить тільки від питань спікера, не від твоїх слів
+    display.sync("")
     suggestion_provider.maybe_update(
         transcriber.get_transcript(), display, transcriber.get_latest_speaker_ts()
     )
@@ -65,11 +60,12 @@ def main():
     speaker_queue = queue.Queue()
     mic_queue = queue.Queue()
 
-    user_audio_recorder = DefaultMicRecorder()
-    user_audio_recorder.record_into_queue(mic_queue)
-    time.sleep(2)
-
+    # СУФЛЕР-РЕЖИМ: слухаємо ТІЛЬКИ спікера (інтерв'юера).
+    # Твій мікрофон не потрібен — стрічка показує відповідь з answers.md
+    # або AI-підказку, поки ти читаєш її вголос.
+    user_audio_recorder = DefaultMicRecorder(calibrate=False)
     speaker_audio_recorder = DefaultSpeakerRecorder()
+
     speaker_audio_recorder.record_into_queue(speaker_queue)
 
     model = TranscriberModels.get_model('--api' in sys.argv)
