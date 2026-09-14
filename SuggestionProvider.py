@@ -10,7 +10,7 @@ import config
 BASE_URL = "https://opencode.ai/zen/go/v1"
 
 QUESTION_SETTLE_S = 2.2   # (не використовується)
-QUESTION_STABLE_S = 2.5    # питання мовчить 2.5с → вважаємо завершеним
+QUESTION_STABLE_S = 1.8    # питання мовчить 1.8с → завершене (1с замало: шматки тексту приходять кожні ~1.5-1.8с)
 REFIRE_MIN_NEW_WORDS = 4   # повторний показ тільки якщо питання виросло на 4+ слів (Whisper ставить крапки всюди, крапка = ненадійний сигнал)
 
 SYSTEM_PROMPT_TEMPLATE = (
