@@ -35,7 +35,7 @@ class BaseRecorder:
         self.recorder.listen_in_background(self.source, record_callback, phrase_time_limit=RECORD_TIMEOUT)
 
 class DefaultMicRecorder(BaseRecorder):
-    def __init__(self):
+    def __init__(self, calibrate=True):
         mic_index = self._find_mic()
         if mic_index is not None:
             print(f"[INFO] Using configured mic device index {mic_index}")
@@ -44,7 +44,8 @@ class DefaultMicRecorder(BaseRecorder):
             print("[INFO] Using default Windows microphone")
             source = sr.Microphone(sample_rate=16000)
         super().__init__(source=source)
-        self.adjust_for_noise("Default Mic", "Please make some noise from the Default Mic...")
+        if calibrate:
+            self.adjust_for_noise("Default Mic", "Please make some noise from the Default Mic...")
 
     @staticmethod
     def _find_mic():
