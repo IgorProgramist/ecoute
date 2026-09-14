@@ -56,6 +56,7 @@ class Teleprompter(tk.Canvas):
         self._paused = False
         self._current_text = text
         self._label.config(text=text)
+        print(f"[PROMPT] START ribbon: {text[:70]}")
         h = self._safe_height()
         if self._win is None:
             self._win = self.create_window(0, h // 2, window=self._label, anchor="w")

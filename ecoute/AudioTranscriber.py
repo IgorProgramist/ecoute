@@ -156,10 +156,19 @@ class AudioTranscriber:
                 transcript.pop(-1)
             transcript.insert(0, (f"{who_spoke}: [{text}]\n\n", time_spoken))
         else:
-            # продовження фрази: довге питання приходить у кількох шматках —
-            # ДОПИСУЄМО, а не перезаписуємо
-            source_info["phrase_text"] = (source_info["phrase_text"] + " " + text).strip()
-            transcript[0] = (f"{who_spoke}: [{source_info['phrase_text']}]\n\n", time_spoken)
+            prev = source_info["phrase_text"].strip()
+            if prev and prev[-1] in ("?", ".", "!"):
+                # попереднє речення вже ЗАВЕРШЕНЕ (пунктуація в кінці) —
+                # новий шматок це НОВЕ питання, не продовження
+                source_info["phrase_text"] = text
+                if len(transcript) > MAX_PHRASES:
+                    transcript.pop(-1)
+                transcript.insert(0, (f"{who_spoke}: [{text}]\n\n", time_spoken))
+            else:
+                # продовження фрази: довге питання приходить у кількох шматках —
+                # ДОПИСУЄМО, а не перезаписуємо
+                source_info["phrase_text"] = (prev + " " + text).strip()
+                transcript[0] = (f"{who_spoke}: [{source_info['phrase_text']}]\n\n", time_spoken)
 
     def get_current_speaker_phrase(self):
         """Повний накопичений текст поточної фрази спікера (питання)."""
