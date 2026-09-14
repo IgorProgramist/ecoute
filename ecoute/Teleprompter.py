@@ -6,8 +6,9 @@ import config
 CHROMA = config.TRANSPARENT_COLOR
 LEFT_MARGIN = 80
 
-# --- СУФЛЕР-РЕЖИМ: стрічка їде справа-наліво ПОСТІЙНО ---
-SCROLL_SPEED_PX_S = 170  # швидкість руху стрічки, пікселів/секунду
+# --- СУФЛЕР-РЕЖИМ: стрічка їде справа-наліво ---
+SCROLL_SPEED_PX_S = 170   # основна швидкість читання, пікселів/секунду
+ENTRY_SPEED_PX_S = 500    # швидкість заїзду тексту справа до точки читання
 
 
 class Teleprompter(tk.Canvas):
@@ -58,10 +59,9 @@ class Teleprompter(tk.Canvas):
         h = self._safe_height()
         if self._win is None:
             self._win = self.create_window(0, h // 2, window=self._label, anchor="w")
-        # старт: текст ОДРАЗУ на точці читання (лівий край) — читати
-        # починаєш миттєво, хвіст просто їхе вліво. Ніякого чекання,
-        # поки текст доїде з правого краю
-        self._x = float(LEFT_MARGIN)
+        # старт: текст за правим краєм вікна і ШВИДКО заїжджає до точки
+        # читання (лівий край), потім сідає на швидкість читання
+        self._x = float(self.winfo_width() or 1000)
         self._scrolling = True
         self._last_t = time.monotonic()
         self._scroll_frame()
@@ -125,7 +125,12 @@ class Teleprompter(tk.Canvas):
         now = time.monotonic()
         dt = min(now - self._last_t, 0.1)
         self._last_t = now
-        self._x -= SCROLL_SPEED_PX_S * dt
+
+        # швидкий заїзд справа до точки читання, потім звичайна швидкість
+        if self._x > LEFT_MARGIN:
+            self._x -= ENTRY_SPEED_PX_S * dt
+        else:
+            self._x -= SCROLL_SPEED_PX_S * dt
 
         text_w = self._font.measure(self._label.cget("text"))
         # коли текст повністю виїхав за лівий край — ховаємо стрічку
