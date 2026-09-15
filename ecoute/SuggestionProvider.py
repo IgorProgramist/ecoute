@@ -3,21 +3,24 @@ import re
 import threading
 import time
 import uuid
+from datetime import datetime
 from openai import OpenAI
 
 import config
 
 BASE_URL = "https://opencode.ai/zen/go/v1"
 
-QUESTION_SETTLE_S = 2.2   # (не використовується)
-QUESTION_STABLE_S = 1.8    # питання мовчить 1.8с → завершене (1с замало: шматки тексту приходять кожні ~1.5-1.8с)
-REFIRE_MIN_NEW_WORDS = 4   # повторний показ тільки якщо питання виросло на 4+ слів (Whisper ставить крапки всюди, крапка = ненадійний сигнал)
+QUESTION_SILENCE_S = 2.5   # аудіо-тиша 2.5с = питання завершене (порог <2с стріляє в "сліпій зоні", доки записується наступний шматок)
+REFIRE_MIN_NEW_WORDS = 4   # повторний показ тільки якщо питання виросло на 4+ слів
 
 SYSTEM_PROMPT_TEMPLATE = (
     "You are helping a candidate during a live technical job interview (Unity / Technical Artist role). "
-    "You receive the interviewer's latest spoken question from a transcript. "
+    "You receive the interviewer's latest spoken question. "
+    "You are also given the candidate's own prepared answers for similar questions — "
+    "reuse their facts, style and tone (first person, confident, direct). "
     "Reply in the SAME language as the question (English or Ukrainian). "
     "The answer must be at most {max_words} words: a direct, confident reply. "
+    "Do not use lists, headings or markdown — plain sentences only. "
     "Output ONLY the answer text, nothing else."
 )
 
@@ -90,32 +93,39 @@ class SuggestionProvider:
             return best
         return None
 
+    def _similar_prepared(self, question, k=3):
+        """ТОП-k найближчих prepared-відповідей — контекст для AI."""
+        qn = _normalize(question)
+        scored = [
+            (difflib.SequenceMatcher(None, qn, qnorm).ratio(), qorig, aorig)
+            for qorig, aorig, qnorm in self.prepared_norm
+        ]
+        scored.sort(key=lambda x: x[0], reverse=True)
+        return [(q, a) for _, q, a in scored[:k]]
+
     def _extract_speaker_text(self, transcript):
         for line in transcript.splitlines():
             if line.startswith("Speaker:"):
                 return line[len("Speaker:"):].strip().strip("[]").strip()
         return None
 
-    def maybe_update(self, question, display, phrase_epoch=None):
+    def maybe_update(self, question, display, phrase_epoch=None, speaker_last_ts=None):
         question = (question or "").strip()
         if not question:
             return
-        now = time.time()
 
         if phrase_epoch is not None and phrase_epoch != self._last_epoch:
             # нове питання (нова фраза) — дозволяємо показ заново
             self._last_epoch = phrase_epoch
             self._last_fired_text = None
 
-        if question != self.last_question:
-            # питання ще договорюється — запам'ятати час останньої зміни
-            self.last_question = question
-            self._q_changed_at = now
-            return
-
-        stable_s = now - self._q_changed_at
-        if stable_s < QUESTION_STABLE_S:
-            return  # питання ще не дозріло — НЕ відповідаємо на частину
+        # сигнал завершеності = АУДІО-тиша: коли спікер реально замовк.
+        # Текстова стабільність ненадійна — шматки тексту приходять
+        # з cadence ~1.5-2с і стріляють посеред питання
+        if speaker_last_ts is not None:
+            silence_s = (datetime.utcnow() - speaker_last_ts).total_seconds()
+            if silence_s < QUESTION_SILENCE_S:
+                return  # спікер ще говорить (недавно був аудіо) — чекати
 
         # повторний показ тільки коли питання РЕАЛЬНО виросло
         # (дрібні шматки/повтори від whisper не рестартують стрічку)
@@ -125,7 +135,7 @@ class SuggestionProvider:
             if new_n - old_n < REFIRE_MIN_NEW_WORDS:
                 return
         self._last_fired_text = question
-        print(f"[MATCH] question complete ({stable_s:.1f}s stable): {question[:90]}")
+        print(f"[MATCH] question complete: {question[:90]}")
 
         prepared = self._best_prepared(question)
         if prepared is not None:
@@ -146,11 +156,23 @@ class SuggestionProvider:
 
     def _fetch(self, question, display):
         try:
+            # контекст: схожі prepared-відповіді кандидата (уже завантажені
+            # при старті — читання файлу не витрачає час під час інтерв'ю)
+            examples = self._similar_prepared(question)
+            examples_text = "\n\n".join(f"Q: {q}\nA: {a}" for q, a in examples)
+            system = SYSTEM_PROMPT_TEMPLATE.format(max_words=config.AI_MAX_WORDS)
             resp = self.client.chat.completions.create(
                 model=config.AI_MODEL,
                 messages=[
-                    {"role": "system", "content": SYSTEM_PROMPT_TEMPLATE.format(max_words=config.AI_MAX_WORDS)},
-                    {"role": "user", "content": question},
+                    {"role": "system", "content": system},
+                    {
+                        "role": "user",
+                        "content": (
+                            f"Candidate's prepared answers for similar questions:\n"
+                            f"{examples_text}\n\n"
+                            f"Interviewer's question: {question}"
+                        ),
+                    },
                 ],
                 max_tokens=config.AI_MAX_TOKENS,
             )
@@ -160,8 +182,12 @@ class SuggestionProvider:
                 reasoning = getattr(msg, "reasoning_content", "") or getattr(msg, "reasoning", "") or ""
                 sentences = [s.strip() for s in reasoning.replace("\n", ". ").split(".") if s.strip()]
                 answer = sentences[-1][:config.AI_MAX_WORDS * 10] if sentences else ""
+            answer = answer.replace("*", "")
+            if answer:
+                print(f"[AI] dynamic answer: {answer[:80]}")
         except Exception as e:
-            answer = f"[AI error: {e}]"
+            print(f"[AI] error: {e!r}")
+            return
         finally:
             self.busy = False
 

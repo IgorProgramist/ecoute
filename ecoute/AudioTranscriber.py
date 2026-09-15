@@ -182,6 +182,10 @@ class AudioTranscriber:
         """Номер генерації фрази: змінюється щоразу, коли починається нове питання."""
         return self.audio_sources["Speaker"]["phrase_epoch"]
 
+    def get_speaker_last_ts(self):
+        """Час останнього АУДІО-шматка спікера — сигнал 'інтерв'юер ще говорить'."""
+        return self.audio_sources["Speaker"]["last_spoken"]
+
     def get_transcript(self):
         combined_transcript = list(merge(
             self.transcript_data["You"], self.transcript_data["Speaker"], 

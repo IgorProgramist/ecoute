@@ -47,8 +47,22 @@ class IdleGate:
         self.provider = provider
 
         def watch():
+            # якщо консоль недоступна (stdin перенаправлений / планувальник)
+            # — суфлер активується одразу, щоб не слухати "в нічку"
+            try:
+                interactive = sys.stdin is not None and sys.stdin.isatty()
+            except Exception:
+                interactive = False
+            if not interactive:
+                self.active = True
+                print("[CONTROL] console not available -> суфлер АКТИВНИЙ одразу")
+                return
             while True:
-                input()
+                try:
+                    input()
+                except (EOFError, OSError):
+                    time.sleep(0.5)
+                    continue
                 self.active = not self.active
                 if self.active:
                     # стираємо почуте ДО активації
@@ -69,7 +83,8 @@ def update_transcript_UI(transcriber, display, suggestion_provider, gate):
     if gate.active:
         suggestion_provider.maybe_update(
             transcriber.get_current_speaker_phrase(), display,
-            transcriber.get_speaker_phrase_epoch()
+            transcriber.get_speaker_phrase_epoch(),
+            transcriber.get_speaker_last_ts()
         )
     display.after(100, update_transcript_UI, transcriber, display, suggestion_provider, gate)
 
@@ -112,7 +127,7 @@ def main():
     # СУФЛЕР-РЕЖИМ: слухаємо ТІЛЬКИ спікера (інтерв'юера).
     # Твій мікрофон не потрібен — стрічка показує відповідь з answers.md
     # або AI-підказку, поки ти читаєш її вголос.
-    user_audio_recorder = DefaultMicRecorder(calibrate=False)
+    user_audio_recorder = DefaultMicRecorder(calibrate=False, probe=False)
     speaker_audio_recorder = DefaultSpeakerRecorder()
 
     speaker_audio_recorder.record_into_queue(speaker_queue)
@@ -132,6 +147,9 @@ def main():
 
     gate = IdleGate()
     gate.start(display, transcriber, suggestion_provider)
+    if '--active' in sys.argv:
+        gate.active = True
+        print("[CONTROL] --active: суфлер активований одразу (без ENTER)")
     print("[CONTROL] РЕЖИМ ОЧІКУВАННЯ: стрічка нічого не показує.")
     print("[CONTROL] Натисни ENTER у консолі, коли інтерв'ю перейде на англійську.")
     print("[CONTROL] Наступний ENTER поверне в очікування.")

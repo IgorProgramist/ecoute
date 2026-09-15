@@ -1,5 +1,11 @@
 import custom_speech_recognition as sr
 import pyaudiowpatch as pyaudio
+import threading
+import time
+import wave
+import os
+import tempfile
+import winsound
 from datetime import datetime
 import numpy
 import config
@@ -7,6 +13,19 @@ import config
 RECORD_TIMEOUT = 1.5
 ENERGY_THRESHOLD = 250
 DYNAMIC_ENERGY_THRESHOLD = True
+
+def _make_tone_wav(seconds=1.6, freq=440):
+    """Короткий тестовий тон: BT-loopback віддає дані тільки коли щось грає."""
+    path = os.path.join(tempfile.gettempdir(), "ecoute_test_tone.wav")
+    rate = 16000
+    arr = (numpy.sin(2 * numpy.pi * freq * numpy.arange(int(rate * seconds)) / rate) * 12000).astype(numpy.int16)
+    with wave.open(path, "wb") as w:
+        w.setnchannels(1)
+        w.setsampwidth(2)
+        w.setframerate(rate)
+        w.writeframes(arr.tobytes())
+    return path
+
 
 class BaseRecorder:
     def __init__(self, source):
@@ -21,11 +40,49 @@ class BaseRecorder:
 
         self.source = source
 
-    def adjust_for_noise(self, device_name, msg):
+    def adjust_for_noise(self, device_name, msg, test_sound=None):
         print(f"[INFO] Adjusting for ambient noise from {device_name}. " + msg)
-        with self.source:
-            self.recorder.adjust_for_ambient_noise(self.source)
-        print(f"[INFO] Completed ambient noise adjustment for {device_name}.")
+        # BT-loopback потік може блокуватись назавжди — калібруємо з таймаутом,
+        # інакше білд ніколи не доходить до READY
+        def _calibrate():
+            try:
+                with self.source:
+                    if test_sound:
+                        # граємо тон, щоб loopback/мікрофон мали що читати
+                        def _play():
+                            try:
+                                winsound.PlaySound(test_sound, winsound.SND_FILENAME)
+                            except Exception:
+                                pass
+                        _play_thread = threading.Thread(target=_play, daemon=True)
+                        _play_thread.start()
+                        time.sleep(0.05)
+                    self.recorder.adjust_for_ambient_noise(self.source, duration=1.2)
+            except Exception as e:
+                print(f"[WARN] calibration stream error ({device_name}): {e!r}")
+
+        t = threading.Thread(target=_calibrate, daemon=True)
+        t.start()
+        t.join(timeout=8)
+        if t.is_alive():
+            # ВАЖЛИВО: не закриваємо стрім звідси — read() в іншому потоці
+            # тримає його, закриття = нативний краш. Просто пересоздаємо source
+            print(f"[WARN] ambient adjust for {device_name} timed out — skipping calibration")
+            self._rebuild_source()
+        else:
+            print(f"[INFO] Completed ambient noise adjustment for {device_name}.")
+
+    def _rebuild_source(self):
+        """Новий Microphone-обʼєкт з тими самими параметрами (без відкриття стріму)."""
+        old = self.source
+        old.stream = None  # стрім належить завислому daemon-потоку, лишаємо його
+        self.source = sr.Microphone(
+            device_index=old.device_index,
+            sample_rate=old.SAMPLE_RATE,
+            chunk_size=old.CHUNK,
+            speaker=getattr(old, "speaker", False),
+            channels=getattr(old, "channels", 1),
+        )
 
     def record_into_queue(self, audio_queue):
         def record_callback(_, audio:sr.AudioData) -> None:
@@ -35,8 +92,14 @@ class BaseRecorder:
         self.recorder.listen_in_background(self.source, record_callback, phrase_time_limit=RECORD_TIMEOUT)
 
 class DefaultMicRecorder(BaseRecorder):
-    def __init__(self, calibrate=True):
-        mic_index = self._find_mic()
+    def __init__(self, calibrate=True, probe=True):
+        if probe:
+            mic_index = self._find_mic()
+        else:
+            # суфлер-режим: мікрофон не слухається — probe пропускаємо,
+            # економимо ~5с старту і не турбуємо BT-гарнітуру
+            print("[INFO] sufler mode: mic probe skipped")
+            mic_index = None
         if mic_index is not None:
             print(f"[INFO] Using configured mic device index {mic_index}")
             source = sr.Microphone(device_index=mic_index, sample_rate=16000)
@@ -139,4 +202,10 @@ class DefaultSpeakerRecorder(BaseRecorder):
                                chunk_size=1024,
                                channels=default_speakers["maxInputChannels"])
         super().__init__(source=source)
-        self.adjust_for_noise("Default Speaker", "Please make or play some noise from the Default Speaker...")
+        # тестовий тон: BT-loopback віддає дані тільки коли щось грає,
+        # тому калібрування спікера грає тон самостійно
+        self.adjust_for_noise(
+            "Default Speaker",
+            "Calibrating with built-in test tone...",
+            test_sound=_make_tone_wav(),
+        )
