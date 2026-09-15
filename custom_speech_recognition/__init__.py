@@ -202,7 +202,8 @@ class Microphone(AudioSource):
 
     def __exit__(self, exc_type, exc_value, traceback):
         try:
-            self.stream.close()
+            if self.stream is not None:
+                self.stream.close()
         finally:
             self.stream = None
             self.audio.terminate()
