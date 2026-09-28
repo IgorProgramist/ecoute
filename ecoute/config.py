@@ -39,7 +39,7 @@ WINDOW_SIZE = "1000x240"
 # --- AI ПІДКАЗКИ (opencode Go) ---
 AI_MODEL = "glm-5.3-flash"      # альтернатива: glm-5.2, kimi-k3
 AI_MAX_TOKENS = 150
-AI_MAX_WORDS = 25               # ліміт слів у динамічній відповіді AI (40 = занадто довга генерація)
+AI_MAX_WORDS = 40               # ліміт слів у динамічній відповіді AI
 
 # --- ТВОЇ ПІДГОТОВЛЕНІ ВІДПОВІДІ ---
 ANSWERS_FILE = "answers.md"

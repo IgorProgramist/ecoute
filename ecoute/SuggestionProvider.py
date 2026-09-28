@@ -15,11 +15,13 @@ REFIRE_MIN_NEW_WORDS = 4   # повторний показ тільки якщо
 
 SYSTEM_PROMPT_TEMPLATE = (
     "You are helping a candidate during a live technical job interview (Unity / Technical Artist role). "
-    "You receive the interviewer's latest spoken question. "
-    "You are also given the candidate's own prepared answers for similar questions — "
+    "You receive the interviewer's latest spoken question, plus the candidate's background info "
+    "and their own prepared answers for similar questions — "
     "reuse their facts, style and tone (first person, confident, direct). "
     "Reply in the SAME language as the question (English or Ukrainian). "
     "The answer must be at most {max_words} words: a direct, confident reply. "
+    "Use SIMPLE everyday words and SHORT sentences — the candidate reads it aloud fast. "
+    "Avoid difficult vocabulary, abbreviations you can't say, and long clauses. "
     "Do not use lists, headings or markdown — plain sentences only. "
     "Output ONLY the answer text, nothing else."
 )
@@ -41,18 +43,23 @@ def _normalize(text):
 
 def load_prepared_answers():
     pairs = []
+    info_text = ""
     try:
         with open(config.ANSWERS_FILE, encoding="utf-8") as f:
             content = f.read()
     except FileNotFoundError:
         print(f"[INFO] No prepared answers file ({config.ANSWERS_FILE})")
-        return pairs
+        return pairs, ""
+    # INFO-блок: довідка про кандидата/Unity — використовується як контекст для AI
+    m = re.search(r"^INFO:\s*$(.*?)(?=^Q:|\Z)", content, flags=re.M | re.S)
+    info_text = m.group(1).strip() if m else ""
     blocks = re.findall(r"Q:\s*(.*?)\nA:\s*(.*?)(?=\nQ:|\Z)", content, flags=re.S)
     for q, a in blocks:
         if q.strip() and a.strip():
             pairs.append((q.strip(), a.strip()))
-    print(f"[INFO] Loaded {len(pairs)} prepared answers from {config.ANSWERS_FILE}")
-    return pairs
+    print(f"[INFO] Loaded {len(pairs)} prepared answers from {config.ANSWERS_FILE}"
+          + (f" (+ INFO block {len(info_text)} chars)" if info_text else ""))
+    return pairs, info_text
 
 
 class SuggestionProvider:
@@ -66,7 +73,7 @@ class SuggestionProvider:
         self._fired_for_q = False
         self._last_fired_text = None
         self._last_epoch = None
-        self.prepared = load_prepared_answers()
+        self.prepared, self.info_text = load_prepared_answers()
         self.prepared_norm = [(q, a, _normalize(q)) for q, a in self.prepared]
         if self.enabled:
             self.client = OpenAI(
@@ -160,6 +167,12 @@ class SuggestionProvider:
             # при старті — читання файлу не витрачає час під час інтерв'ю)
             examples = self._similar_prepared(question)
             examples_text = "\n\n".join(f"Q: {q}\nA: {a}" for q, a in examples)
+            info_block = ""
+            if self.info_text:
+                info_block = (
+                    f"Candidate background info (facts you may use):\n"
+                    f"{self.info_text}\n\n"
+                )
             system = SYSTEM_PROMPT_TEMPLATE.format(max_words=config.AI_MAX_WORDS)
             resp = self.client.chat.completions.create(
                 model=config.AI_MODEL,
@@ -168,6 +181,7 @@ class SuggestionProvider:
                     {
                         "role": "user",
                         "content": (
+                            f"{info_block}"
                             f"Candidate's prepared answers for similar questions:\n"
                             f"{examples_text}\n\n"
                             f"Interviewer's question: {question}"
