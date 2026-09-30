@@ -68,6 +68,17 @@ class Teleprompter(tk.Canvas):
         self._last_t = time.monotonic()
         self._scroll_frame()
 
+    def update_text(self, text):
+        """Оновити текст стрічки НА ЛЕТУ (для стрімінгу AI) — без рестарту руху."""
+        text = (text or "").strip()
+        if not text:
+            return
+        if self._win is None or not (self._scrolling or self._paused):
+            self.start(text)
+            return
+        self._current_text = text
+        self._label.config(text=text)
+
     def hide(self):
         """Приховати стрічку (порожньо = вікно прозоре і невидиме)."""
         self._cancel()

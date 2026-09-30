@@ -2,6 +2,7 @@ import threading
 import queue
 import time
 import sys
+import os
 import subprocess
 import customtkinter as ctk
 
@@ -14,6 +15,25 @@ from Teleprompter import Teleprompter
 from SuggestionProvider import SuggestionProvider, load_api_key
 
 CHROMA = config.TRANSPARENT_COLOR
+
+
+class _Tee:
+    """Дублює консольний вивід у last_run.log — щоб логи завжди можна було прочитати."""
+    def __init__(self, path):
+        self.file = open(path, "a", encoding="utf-8", buffering=1)
+        self.stdout = sys.stdout
+
+    def write(self, s):
+        self.stdout.write(s)
+        self.file.write(s)
+
+    def flush(self):
+        self.stdout.flush()
+        self.file.flush()
+
+
+sys.stdout = _Tee(os.path.join(os.path.dirname(os.path.abspath(__file__)), "last_run.log"))
+sys.stderr = _Tee(os.path.join(os.path.dirname(os.path.abspath(__file__)), "last_run.log"))
 
 
 class IdleGate:

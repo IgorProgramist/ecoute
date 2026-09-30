@@ -15,6 +15,7 @@ import collections
 import json
 import base64
 import threading
+import queue
 import hashlib
 import hmac
 import time
@@ -176,26 +177,34 @@ class Microphone(AudioSource):
         assert self.stream is None, "This audio source is already inside a context manager"
         self.audio = self.pyaudio_module.PyAudio()
 
+        # callback-режим: стрім ПХАЄ дані в чергу сам — read() ніколи не
+        # блокується навіки (BT-loopback вмирає тихо, блокуючі read()
+        # вмикали намертво весь конвеєр)
+        audio_q = queue.Queue()
+
+        def _cb(in_data, frame_count, time_info, status):
+            audio_q.put(bytes(in_data))
+            return (None, self.pyaudio_module.paContinue)
+
         try:
             if self.speaker:
                 p = self.audio
-                self.stream = Microphone.MicrophoneStream(
-                    p.open(
-                        input_device_index=self.device_index,
-                        channels=self.channels,
-                        format=self.format,
-                        rate=self.SAMPLE_RATE,
-                        frames_per_buffer=self.CHUNK,
-                        input=True
-                    )
+                stream = p.open(
+                    input_device_index=self.device_index,
+                    channels=self.channels,
+                    format=self.format,
+                    rate=self.SAMPLE_RATE,
+                    frames_per_buffer=self.CHUNK,
+                    input=True,
+                    stream_callback=_cb,
                 )
             else:
-                self.stream = Microphone.MicrophoneStream(
-                    self.audio.open(
-                        input_device_index=self.device_index, channels=1, format=self.format,
-                        rate=self.SAMPLE_RATE, frames_per_buffer=self.CHUNK, input=True,
-                    )
+                stream = self.audio.open(
+                    input_device_index=self.device_index, channels=1, format=self.format,
+                    rate=self.SAMPLE_RATE, frames_per_buffer=self.CHUNK, input=True,
+                    stream_callback=_cb,
                 )
+            self.stream = Microphone.MicrophoneStream(stream, audio_q)
         except Exception:
             self.audio.terminate()
         return self
@@ -209,10 +218,18 @@ class Microphone(AudioSource):
             self.audio.terminate()
 
     class MicrophoneStream(object):
-        def __init__(self, pyaudio_stream):
+        def __init__(self, pyaudio_stream, audio_q=None):
             self.pyaudio_stream = pyaudio_stream
+            self.audio_q = audio_q  # callback-черга; None = старий блокуючий режим
 
-        def read(self, size):
+        def read(self, size, exception_on_overflow=False):
+            if self.audio_q is not None:
+                # беремо з черги з таймаутом: немає даних -> порожній буфер
+                # (семантика "кінець потоку"), конвеєр залишається живим
+                try:
+                    return self.audio_q.get(timeout=2.0)
+                except Exception:
+                    return b""
             return self.pyaudio_stream.read(size, exception_on_overflow=False)
 
         def close(self):

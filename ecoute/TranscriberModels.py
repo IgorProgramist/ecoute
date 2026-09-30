@@ -18,10 +18,12 @@ def _add_cuda_dll_dirs():
                 bin_dir = os.path.join(list(spec.submodule_search_locations)[0], "bin")
                 if os.path.isdir(bin_dir):
                     os.add_dll_directory(bin_dir)
+                    # CTranslate2 грузить cublas64_12.dll звичайним LoadLibrary —
+                    # той шукає по PATH і ігнорує add_dll_directory
+                    os.environ["PATH"] = bin_dir + os.pathsep + os.environ["PATH"]
     except Exception:
         pass
 
-import torch
 from faster_whisper import WhisperModel
 from openai import OpenAI
 import config
@@ -32,11 +34,19 @@ def get_model(use_api):
     else:
         return FasterWhisperTranscriber()
 
+def _has_cuda():
+    # без torch: CTranslate2 сам знає CUDA (torch на 2.5GB не потрібен)
+    try:
+        import ctranslate2
+        return ctranslate2.get_cuda_device_count() > 0
+    except Exception:
+        return False
+
 class FasterWhisperTranscriber:
     def __init__(self):
         print(f"[INFO] Loading Faster Whisper model ({config.WHISPER_MODEL})...")
         _add_cuda_dll_dirs()
-        device = "cuda" if torch.cuda.is_available() else "cpu"
+        device = "cuda" if _has_cuda() else "cpu"
         try:
             self.model = WhisperModel(config.WHISPER_MODEL, device=device, compute_type="int8")
             # тестовий прогін: CUDA DLLs можуть бути відсутні — дізнаємось одразу

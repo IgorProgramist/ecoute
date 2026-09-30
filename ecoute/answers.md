@@ -1,3 +1,15 @@
+INFO:
+ABOUT ME:
+- Unity Technical Artist, 10+ years in game development
+- Started as a developer with Flash and ActionScript 3, moved to Technical Art
+- Worked at VOLMI, Mad Brain Games, GamePoint, Sigma Software, Skywind Group
+- Now at Custom Game Studio: mobile and slot game projects
+- Main skills: Unity UI integration, animations, Spine, atlases, localization, performance optimization, Addressables
+- I take art content, set it up in Unity, fix technical problems, make it work well in the game
+- I like working between artists and developers, I understand both sides
+- I know C# basics, I can read and fix code, I used to write Flash games
+- I speak Ukrainian and English
+
 UNITY KNOWLEDGE (facts AI can use):
 
 FROM BRIEF / MOCKUP TO FEATURE:

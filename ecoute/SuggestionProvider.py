@@ -10,7 +10,7 @@ import config
 
 BASE_URL = "https://opencode.ai/zen/go/v1"
 
-QUESTION_SILENCE_S = 2.3   # аудіо-тиша 2.3с = питання завершене (порог <2с стріляє в "сліпій зоні", доки записується наступний шматок)
+QUESTION_SILENCE_S = 3.0    # аудіо-тиша 3с = питання завершене (дихання/задуми посеред питання коротші) (порог <2с стріляє в "сліпій зоні", доки записується наступний шматок)
 REFIRE_MIN_NEW_WORDS = 4   # повторний показ тільки якщо питання виросло на 4+ слів
 
 SYSTEM_PROMPT_TEMPLATE = (
@@ -19,9 +19,10 @@ SYSTEM_PROMPT_TEMPLATE = (
     "and their own prepared answers for similar questions — "
     "reuse their facts, style and tone (first person, confident, direct). "
     "Reply in the SAME language as the question (English or Ukrainian). "
-    "The answer must be at most {max_words} words: a direct, confident reply. "
-    "Use SIMPLE everyday words and SHORT sentences — the candidate reads it aloud fast. "
-    "Avoid difficult vocabulary, abbreviations you can't say, and long clauses. "
+    "The answer must be about {max_words} words — a complete, confident reply that "
+    "fully answers ALL parts of the question. "
+    "Use SIMPLE everyday words and short clear sentences — the candidate reads it aloud fast. "
+    "Avoid difficult vocabulary and abbreviations you can't say. "
     "Do not use lists, headings or markdown — plain sentences only. "
     "Output ONLY the answer text, nothing else."
 )
@@ -73,8 +74,10 @@ class SuggestionProvider:
         self._fired_for_q = False
         self._last_fired_text = None
         self._last_epoch = None
+        self._retried = False
         self.prepared, self.info_text = load_prepared_answers()
         self.prepared_norm = [(q, a, _normalize(q)) for q, a in self.prepared]
+        self._parse_info_sections()
         if self.enabled:
             self.client = OpenAI(
                 api_key=api_key,
@@ -88,6 +91,59 @@ class SuggestionProvider:
         else:
             self.client = None
             print("[INFO] AI suggestions disabled (no API key)")
+
+    def _parse_info_sections(self):
+        """Ріже INFO на підтеми ОДИН раз при старті: заголовок = рядок
+        (не список з '-'), закінчений на ':', до 80 символів."""
+        self.info_about = ""
+        self.info_sections = []
+        if not self.info_text:
+            return
+        current_title, current_lines = None, []
+        for line in self.info_text.splitlines():
+            stripped = line.strip()
+            is_header = (stripped.endswith(":") and len(stripped) <= 80
+                         and not stripped.startswith("-"))
+            if is_header:
+                if current_title is not None:
+                    self.info_sections.append((current_title, "\n".join(current_lines).strip()))
+                current_title, current_lines = stripped, []
+            else:
+                current_lines.append(line)
+        if current_title is not None:
+            self.info_sections.append((current_title, "\n".join(current_lines).strip()))
+        # ABOUT ME — окремо: він летить у промпт завжди (ідентичність кандидата)
+        kept = []
+        for t, x in self.info_sections:
+            if "ABOUT ME" in t.upper() and not self.info_about:
+                self.info_about = x
+            else:
+                kept.append((t, x))
+        self.info_sections = kept
+
+    def _relevant_info(self, question, max_sections=2):
+        """ABOUT ME завжди + 1-2 підтеми, найближчі до теми питання.
+        Промпт ~3-5KB замість 198KB → швидкий prefill."""
+        if not self.info_text:
+            return ""
+        qn = _normalize(question)
+        qwords = set(w for w in qn.split() if len(w) >= 4)
+        scored = []
+        for title, text in self.info_sections:
+            tn = _normalize(title + " " + text[:800])
+            twords = set(w for w in tn.split() if len(w) >= 4)
+            overlap = len(qwords & twords)
+            if overlap == 0:
+                overlap = difflib.SequenceMatcher(None, qn, _normalize(title)).ratio()
+            scored.append((overlap, text))
+        scored.sort(key=lambda x: x[0], reverse=True)
+        out = ""
+        if self.info_about:
+            out += f"Candidate background (ABOUT ME):\n{self.info_about}\n\n"
+        for _, text in scored[:max_sections]:
+            if text:
+                out += text.strip() + "\n\n"
+        return out
 
     def _best_prepared(self, question):
         qn = _normalize(question)
@@ -125,10 +181,14 @@ class SuggestionProvider:
             # нове питання (нова фраза) — дозволяємо показ заново
             self._last_epoch = phrase_epoch
             self._last_fired_text = None
+            # діагностика: стан на момент початку нової фрази
+            sil = "?"
+            if speaker_last_ts is not None:
+                sil = f"{(datetime.utcnow() - speaker_last_ts).total_seconds():.1f}s"
+            print(f"[MATCH] new phrase epoch={phrase_epoch}, silence={sil}, q={question[:60]!r}")
 
-        # сигнал завершеності = АУДІО-тиша: коли спікер реально замовк.
-        # Текстова стабільність ненадійна — шматки тексту приходять
-        # з cadence ~1.5-2с і стріляють посеред питання
+        # сигнал завершеності = АУДІО-тиша 3с: дихання/задуми посеред питання
+        # коротші за 3с, тому часткові фрази не стріляють
         if speaker_last_ts is not None:
             silence_s = (datetime.utcnow() - speaker_last_ts).total_seconds()
             if silence_s < QUESTION_SILENCE_S:
@@ -161,6 +221,81 @@ class SuggestionProvider:
         # відповідь реально не готова (без миготіння)
         threading.Thread(target=self._fetch, args=(question, display), daemon=True).start()
 
+    def _call_api(self, messages, max_tokens, timeout_s=25):
+        """Жорсткий дедлайн: SDK timeout проксі ігнорує (keep-alive), тому
+        тримаємо запит у daemon-потоку і просто чекаємо рівно timeout_s.
+        25с = повільна відповідь сервера (13-20с) все одно показується,
+        як і було до дедлайнів."""
+        result = {}
+
+        def _run():
+            try:
+                result["r"] = self.client.chat.completions.create(
+                    model=config.AI_MODEL,
+                    messages=messages,
+                    max_tokens=max_tokens,
+                    extra_body={"reasoning_effort": "low"},
+                )
+            except Exception as e:
+                result["e"] = e
+
+        th = threading.Thread(target=_run, daemon=True)
+        t0 = time.time()
+        th.start()
+        th.join(timeout=timeout_s)
+        if th.is_alive():
+            raise TimeoutError(f"AI call exceeded {timeout_s}s (latency {time.time() - t0:.1f}s)")
+        if "e" in result:
+            raise result["e"]
+        return result["r"]
+
+    def _stream_answer(self, messages, display):
+        """Стрімінг: відповідь показується у стрічці ПО МІРІ генерації.
+        Повертає повний текст або None (якщо стрім не дав контенту)."""
+        box = {}
+
+        def _worker():
+            try:
+                t0 = time.time()
+                stream = self.client.chat.completions.create(
+                    model=config.AI_MODEL,
+                    messages=messages,
+                    max_tokens=config.AI_MAX_TOKENS,
+                    extra_body={"reasoning_effort": "low"},
+                    stream=True,
+                )
+                acc = ""
+                got_first = False
+                last_push = 0.0
+                for chunk in stream:
+                    now = time.time()
+                    if not got_first and now - t0 > 10:
+                        # 10с без жодного слова — сервер завис, марно чекати
+                        print("[AI] stream: no content in 10s, falling back")
+                        return
+                    piece = ""
+                    if chunk.choices:
+                        delta = chunk.choices[0].delta
+                        piece = (delta.content or "") if delta else ""
+                    if piece:
+                        got_first = True
+                        acc += piece
+                        if now - last_push >= 0.25:
+                            last_push = now
+                            self._set_text(display, acc.replace("*", ""))
+                if acc.strip():
+                    box["a"] = acc.strip()
+            except Exception as e:
+                print(f"[AI] stream error: {e!r}")
+
+        th = threading.Thread(target=_worker, daemon=True)
+        th.start()
+        th.join(timeout=35)
+        if th.is_alive():
+            print("[AI] stream stalled, abandoned")
+            return None
+        return box.get("a") or None
+
     def _fetch(self, question, display):
         try:
             # контекст: схожі prepared-відповіді кандидата (уже завантажені
@@ -174,29 +309,48 @@ class SuggestionProvider:
                     f"{self.info_text}\n\n"
                 )
             system = SYSTEM_PROMPT_TEMPLATE.format(max_words=config.AI_MAX_WORDS)
-            resp = self.client.chat.completions.create(
-                model=config.AI_MODEL,
-                messages=[
-                    {"role": "system", "content": system},
-                    {
-                        "role": "user",
-                        "content": (
-                            f"{info_block}"
-                            f"Candidate's prepared answers for similar questions:\n"
-                            f"{examples_text}\n\n"
-                            f"Interviewer's question: {question}"
-                        ),
-                    },
-                ],
-                max_tokens=config.AI_MAX_TOKENS,
-            )
-            msg = resp.choices[0].message
-            answer = (msg.content or "").strip()
+            info_block = self._relevant_info(question)
+            messages = [
+                {"role": "system", "content": system},
+                {
+                    "role": "user",
+                    "content": (
+                        f"{info_block}"
+                        f"Candidate's prepared answers for similar questions:\n"
+                        f"{examples_text}\n\n"
+                        f"Interviewer's question: {question}"
+                    ),
+                },
+            ]
+            t0 = time.time()
+            answer = self._stream_answer(messages, display)
             if not answer:
-                reasoning = getattr(msg, "reasoning_content", "") or getattr(msg, "reasoning", "") or ""
-                sentences = [s.strip() for s in reasoning.replace("\n", ". ").split(".") if s.strip()]
-                answer = sentences[-1][:config.AI_MAX_WORDS * 10] if sentences else ""
+                # стрім не дав контенту — повний запит як раніше
+                resp = self._call_api(messages, config.AI_MAX_TOKENS)
+                msg = resp.choices[0].message
+                answer = (msg.content or "").strip()
+                n_words = len(answer.split())
+                # ретрай ТОЛЬКИ коли відповідь реально неповна: пуста або значно
+                # коротша за ліміт. finish=length з 40 слів = нормальна відповідь,
+                # ретрай тут лише подвоював час (33с замість 3с)
+                if n_words < max(12, config.AI_MAX_WORDS - 5) and not self._retried:
+                    print(f"[AI] answer too short ({n_words} words), retrying with bigger budget...")
+                    self._retried = True
+                    try:
+                        resp = self._call_api(messages, 900)
+                        msg = resp.choices[0].message
+                        answer = (msg.content or "").strip() or answer
+                    finally:
+                        self._retried = False
+                if not answer:
+                    # reasoning з'їв усі токени — НЕ ліпимо відповідь зі сміття,
+                    # стрічка мовчить краще ніж покаже обірване слово
+                    print("[AI] empty content (reasoning ate the token budget), skipping")
+                    return
             answer = answer.replace("*", "")
+            if len(answer.split()) > config.AI_MAX_WORDS + 10:
+                answer = " ".join(answer.split()[:config.AI_MAX_WORDS + 10])
+            print(f"[AI] latency {time.time() - t0:.1f}s, words {len(answer.split())}")
             if answer:
                 print(f"[AI] dynamic answer: {answer[:80]}")
         except Exception as e:
@@ -211,6 +365,8 @@ class SuggestionProvider:
         self.last_shown_answer = text
         text = text.replace("\n", "   ")
         try:
-            display.after(0, display.start, text)
+            # update_text: коли стрічка вже їде — текст оновлюється на лету
+            # (стрімінг), коли стрічка пуста — стартує як звичайно
+            display.after(0, display.update_text, text)
         except Exception:
             pass
