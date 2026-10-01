@@ -1,3 +1,4 @@
+import os
 import time
 import tkinter as tk
 from tkinter import font as tkfont
@@ -35,9 +36,45 @@ class Teleprompter(tk.Canvas):
         self._landed_at = 0.0
         self._last_toggle = 0.0
         self._start_global_pause()
-        # пауза тільки на Ctrl (лівий/правий)
+        self._start_global_hotkeys()
+
+    def show_cover_letter(self):
+        """Кнопка '1' (глобально): показати текст CoverLetter.md у стрічці."""
+        try:
+            path = os.path.join(os.path.dirname(os.path.abspath(__file__)), "CoverLetter.md")
+            with open(path, encoding="utf-8") as f:
+                text = f.read()
+            # одна безперервна лінія: переноси рядків/абзаци ламають рендер
+            # стрічки у кілька рядків
+            text = " ".join(text.split())
+            if text:
+                self.start(text)
+                print("[PROMPT] CoverLetter loaded into ribbon")
+            else:
+                print("[WARN] CoverLetter.md is empty")
+        except Exception as e:
+            print(f"[WARN] CoverLetter load failed: {e!r}")
+
+    def _start_global_hotkeys(self):
+        """Глобальна кнопка '1' — показати CoverLetter (працює з будь-якого вікна)."""
+        def _cb(event):
+            name = (event.name or "").lower()
+            if name == "1":
+                try:
+                    self.after(0, self.show_cover_letter)
+                except Exception:
+                    pass
+        try:
+            import keyboard
+            keyboard.on_press(_cb)
+            print("[INFO] global hotkey armed: 1 = show CoverLetter")
+        except Exception as e:
+            print(f"[WARN] global '1' hotkey unavailable ({e})")
+        # пауза тільки на Ctrl (лівий/правий) — глобальний хук нижче ловить Alt
         self.bind_all("<Control_L>", lambda e: self.toggle_pause())
         self.bind_all("<Control_R>", lambda e: self.toggle_pause())
+        self.bind_all("<Alt_L>", lambda e: self.toggle_pause())
+        self.bind_all("<Alt_R>", lambda e: self.toggle_pause())
 
     def _safe_height(self):
         h = self.winfo_height()
@@ -97,10 +134,10 @@ class Teleprompter(tk.Canvas):
         self.hide()
 
     def _start_global_pause(self):
-        """Глобальний хук: Ctrl працює навіть коли вікно суфлера не в фокусі."""
+        """Глобальний хук: Alt працює навіть коли вікно суфлера не в фокусі."""
         def _cb(event):
             name = (event.name or "").lower()
-            if "ctrl" in name:
+            if "alt" in name:
                 try:
                     self.after(0, self.toggle_pause)
                 except Exception:
@@ -108,9 +145,9 @@ class Teleprompter(tk.Canvas):
         try:
             import keyboard
             keyboard.on_press(_cb)
-            print("[INFO] global pause hotkey armed: Ctrl (works anywhere)")
+            print("[INFO] global pause hotkey armed: Alt (works anywhere)")
         except Exception as e:
-            print(f"[WARN] global Ctrl pause unavailable ({e}); pause works only when window focused")
+            print(f"[WARN] global Alt pause unavailable ({e}); pause works only when window focused")
 
     def toggle_pause(self):
         # захист від повторів при зажатому Ctrl
