@@ -493,6 +493,21 @@ What I did (short):
 - The cloud - one particle, a 4x4 flipbook, alpha blend. Hammers - sprites with the pivot near the handle.
 - Atlases UI_Core and Island (items together with their shadows). Addressables: Local_Core, Shared_FX, Remote_Island_TeaHouse.
 
+
+=====================================================================
+HOW I WORK (job post: mockup -> feature, ownership, communication)
+=====================================================================
+
+Short: break down the mockup (states, data, taps) -> ask what is missing -> prototype -> base prefab and Canvas ->
+animation and FX -> connect to game state -> two screens, performance, memory, loading -> variants and Addressables.
+
+
+=====================================================================
+QUESTIONS AND ANSWERS (by the topics of block 1)
+=====================================================================
+
+--- QUESTIONS ABOUT MY HOME ASSIGNMENT (they discuss it in the interview) ---
+
 Q: Why did you structure the variants this way?
 A: One base with the same structure and a shared Animator, and variants change only sprites, anchors and data. A change in the base reaches all seven, and the chain is short, so it is clear where every change comes from.
 
@@ -528,11 +543,3 @@ A: Yes, for drafts of tools, searching the docs and routine checks. I compiled, 
 
 Q: What was the hardest?
 A: Tuning the build timing to the reference video, so the next action is ready in under 2 seconds.
-
-
-=====================================================================
-HOW I WORK (job post: mockup -> feature, ownership, communication)
-=====================================================================
-
-Short: break down the mockup (states, data, taps) -> ask what is missing -> prototype -> base prefab and Canvas ->
-animation and FX -> connect to game state -> two screens, performance, memory, loading -> variants and Addressables.

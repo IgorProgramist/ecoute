@@ -45,57 +45,6 @@ More detail:
 - Average FPS hides hitches. Look at the worst frames (frame time graph).
 - Test long sessions: after 10-30 minutes the phone heats up and the frame rate drops.
 
-Q: What is a draw call and a batch?
-A: A draw call is a request from the CPU to the GPU to draw something. A batch joins several compatible draw calls into one. Fewer calls mean less CPU time.
-
-Q: Why does the Stats window show fewer batches but the frame is not faster?
-A: Batches are CPU work. The limit can be the GPU instead, for example overdraw or heavy shaders. So I check both CPU and GPU time.
-
-Q: What is overdraw and how do you reduce it?
-A: Drawing the same pixel many times with transparent layers. I use tight meshes, fewer full-screen transparent images and smaller particles. The Overdraw view shows the hot spots.
-
-Q: What is fill rate and why does it matter on mobile?
-A: How many pixels the GPU can draw per second. Phones have little, so big transparent layers and big particles cost a lot.
-
-Q: What frame budget do you target?
-A: 16.6 ms per frame for 60 fps, 33.3 ms for 30 fps. I leave a margin, because phones heat up and slow down. I watch the worst frames, not only the average.
-
-Q: How do you read the Profiler when the game is slow?
-A: I profile a development build on the phone. If the render thread waits in Gfx.PresentFrame, the GPU is the limit; otherwise the CPU. Then I sort by Self time to find the slow function.
-
-Q: Why is profiling in the Editor not enough?
-A: The Editor adds its own work to the numbers, and a PC is much faster than a phone. I use the Editor only to iterate on problems I first found on the device. I also test a release build, because some problems show only there.
-
-Q: What is GC.Alloc and why care?
-A: Memory created in this frame that later becomes garbage. More garbage means more pauses when Unity cleans it. I keep it at zero per frame and use Call Stacks to find where it comes from.
-
-Q: What creates garbage in UI code that people forget?
-A: Formatting text every frame, GetComponent in Update, and new lists. I update text only when the value changes and use SetText. FindObjectOfType in gameplay is bad too: it searches the whole scene.
-
-Q: The frame rate is fine but the game feels stuttery. Why?
-A: Some frames are much slower than the rest: garbage collection, loading or shader compile. Average FPS hides them. I look at the frame time graph and the worst frames.
-
-Q: How do you prove an optimization helped?
-A: Same phone, same scene, same actions, before and after. I give numbers, like 14.2 ms to 10.8 ms. I also look at the worst frames.
-
-Q: A popup opens with a visible hitch. What do you check?
-A: The Profiler on that frame: creating objects, texture upload, shader compile, layout rebuild, garbage. Then I fix the biggest one: pool or preload the popup, or prewarm the shader.
-
-Q: Why test on a low-end device?
-A: Problems show there first. If it runs well on a weak phone, a strong one is usually fine. I also test long sessions, because phones slow down when they get hot.
-
-Q: What is the difference between Update, FixedUpdate and LateUpdate?
-A: Update runs every frame, FixedUpdate on the physics step, LateUpdate after animation. Camera follow goes in LateUpdate.
-
-Q: Why use Time.deltaTime?
-A: So movement is per second, not per frame. Without it, objects move slower when the frame rate drops.
-
-Q: What three things do you check first when a mobile scene is too heavy?
-A: Whether it is CPU or GPU (Profiler on the phone), then the biggest marker on the main thread (Canvas, particles, garbage), then overdraw in the Frame Debugger. I measure each change separately.
-
-Q: How do you balance quality and performance in a live game on many devices?
-A: Quality tiers (low/mid/high) with a budget for each. On weak phones fewer particles, lower resolution, no post-processing; on strong ones full beauty. I decide by numbers, not by eye.
-
 
 =====================================================================
 2. SHADERS (Shader Graph, math, cost on mobile)
@@ -139,63 +88,6 @@ More detail:
 - Many sprites, one material, different motion: global time + a per-object phase in the vertex colour.
 - MaterialPropertyBlock in URP takes the object out of the SRP Batcher.
 
-Q: What is the SRP Batcher?
-A: In URP it makes draw calls cheaper for objects that use the same shader variant, even with different materials. The shader must keep its material properties in the UnityPerMaterial buffer.
-
-Q: What breaks SRP Batcher compatibility?
-A: A shader without the UnityPerMaterial buffer, or a MaterialPropertyBlock on the renderer. The shader Inspector shows if it is compatible.
-
-Q: How do keywords affect batching?
-A: Every keyword combination is a different shader variant. Two materials with the same shader but different keywords do not batch together. Fewer keywords, more batching.
-
-Q: shader_feature or multi_compile?
-A: shader_feature when the option is set on the material; unused variants are removed from the build. multi_compile when code switches it at runtime; all combinations are built, so the build grows.
-
-Q: What does a magenta or cyan object mean?
-A: Magenta is the error shader: missing, broken, or a Built-in shader in URP. Cyan means the shader is still compiling. If it is pink only on the device, a variant was probably removed from the build.
-
-Q: A shader variant freezes the game on first use. How do you avoid it?
-A: I prewarm it during loading with ShaderVariantCollection.WarmUp. Then the first real use does not stall the frame.
-
-Q: Sprite-Lit or Sprite-Unlit?
-A: Sprite-Lit reacts to Light 2D, Sprite-Unlit ignores lights and is cheaper. Unlit is good for UI-like sprites and effects that glow by themselves.
-
-Q: How do you animate a material without breaking batching?
-A: I animate a shared value or use shader time, plus a small per-object difference in vertex colour. In URP a MaterialPropertyBlock takes the object out of the SRP Batcher, so I avoid it.
-
-Q: How do you make a dissolve effect?
-A: A noise texture is compared with a threshold; pixels below it disappear. A thin bright edge near the threshold looks like burning. Animating the threshold from 0 to 1 dissolves the object.
-
-Q: How do you make a UV scroll for water or energy?
-A: I move the UV by time multiplied by speed and repeat the texture. Two layers moving at different speeds look much richer.
-
-Q: What is a Shader Graph Sub Graph for?
-A: For reusing a group of nodes, like dissolve or UV scroll, in many graphs. One fix in the Sub Graph updates all of them.
-
-Q: If a shader is slow on one phone only, what do you do?
-A: I capture a frame on that phone and look for heavy math, many texture reads or discard. Then I simplify it, use half precision, or move work from pixels to vertices.
-
-Q: Is alpha clipping cheaper than transparency?
-A: Not always. On phone GPUs clipping (discard) turns off an early optimization and can cost more than blending. I measure on the device and choose per effect.
-
-Q: How do you make light effects in URP 2D?
-A: Light 2D components with the 2D Renderer, and normal maps for volume if needed. Things that glow by themselves use unlit sprites with Bloom. Real lights per particle are too expensive.
-
-Q: What is the dot product and where do you use it?
-A: A number that says how much two directions point the same way: 1 - the same, 0 - at a right angle, -1 - opposite. I use it for lighting (normal and light), for a rim around an object (normal and view) and for angle-based masks.
-
-Q: What is the difference between a vertex and a fragment shader?
-A: The vertex shader runs once per vertex, the fragment shader once per pixel. There are many more pixels, so smooth calculations that can be interpolated I move to the vertex shader.
-
-Q: When half and when float?
-A: half for colour, directions and small numbers: it is faster on phones. float for world positions, ever-growing time and big UVs, because half loses precision there and the picture shakes.
-
-Q: When do you write HLSL instead of Shader Graph?
-A: When I need exact cost control, custom lighting or a port of an existing shader. Otherwise Shader Graph, because others can edit it. But I must be able to read simple HLSL to find what is expensive.
-
-Q: Make a dissolve in 5 minutes in the interview - how?
-A: Noise -> compare with a Dissolve Amount slider through Step (or Smoothstep for a soft edge) -> that is the alpha. For a glowing edge - a narrow band near the threshold, multiplied by an edge colour and added to the colour. I expose parameters: threshold, edge width, colour.
-
 
 =====================================================================
 3. RENDER PIPELINE: BUILT-IN, URP, HDRP
@@ -231,15 +123,6 @@ More detail:
 - Moving from Built-in: the Render Pipeline Converter fixes pink materials.
 - URP camera stack: a Base camera + Overlay cameras.
 
-Q: Forward or Deferred for a mobile 2D game?
-A: Forward. Deferred keeps several full-screen textures and does extra passes, and phones are limited in memory and bandwidth. A 2D game rarely needs dozens of lights per pixel.
-
-Q: Everything is pink after moving to URP. What do you do?
-A: The materials still use Built-in shaders. I run the Render Pipeline Converter and remake custom shaders in Shader Graph.
-
-Q: Why can you not drop the 2D Renderer into Graphics settings?
-A: Graphics and Quality take a pipeline asset (UniversalRP), and the 2D Renderer is a renderer inside it. It goes into UniversalRP's Renderer List.
-
 
 =====================================================================
 4. DRAW CALLS AND BATCHING
@@ -273,12 +156,6 @@ More detail:
 - Many IDENTICAL objects - GPU Instancing; many DIFFERENT ones with one shader - SRP Batcher.
 - Stats shows fewer batches but the frame is not faster = the limit is the GPU (overdraw), not the CPU.
 
-Q: What is the difference between static batching, dynamic batching, GPU instancing and the SRP Batcher?
-A: Static merges non-moving meshes at build time, dynamic merges small meshes every frame. Instancing draws many copies of one mesh in one command, and the SRP Batcher does not reduce commands but makes each cheap for the same shader. For 2D sprites in URP the main ones are the SRP Batcher and atlases.
-
-Q: How do you set up atlases for UI and 2D, and what problems did you see?
-A: One atlas per screen or feature, UI separate from world art, big backgrounds and flipbooks outside atlases. Problems: an atlas that grows forever, a sprite on a second atlas page, and broken batches because of draw order.
-
 
 =====================================================================
 5. TEXTURES AND COMPRESSION
@@ -309,54 +186,6 @@ More detail:
 - Check pixels, not only logic: wrong filtering + compression blurred 59 of 90 UI sprites,
   while every test was green.
 - In my test the atlases: 2048, ASTC 6x6, no mipmaps, no rotation, no tight packing, padding 4.
-
-Q: What is Pixels Per Unit?
-A: How many pixels of a sprite make one Unity unit. I keep one PPU for a whole art set, so sizes match. Double PPU makes the sprite half as big.
-
-Q: What is a Sprite Atlas for?
-A: It packs many sprites into one texture, so they draw in fewer draw calls. I group sprites that appear on the same screen.
-
-Q: Why not one big atlas for the whole game?
-A: The whole atlas stays in memory while any sprite from it is used. A screen that needs one icon would load everything. So I make one atlas per screen or feature.
-
-Q: When does a sprite not batch even in the same atlas?
-A: When it uses a different material, or when something else with another texture is drawn between them. Sorting order matters, not only the atlas.
-
-Q: How do you plan atlases for a screen?
-A: I group sprites shown together and keep UI apart from world art. Soft shadows and gradients go into their own atlas with a cheaper compression.
-
-Q: How do you choose texture compression for mobile?
-A: ASTC: 4x4 for sharp UI and small text, 6x6 for items, 8x8 for soft shadows and gradients. ETC2 as a fallback for old Android. I compare the result on a real phone.
-
-Q: Why turn off Read/Write and mipmaps?
-A: Read/Write keeps a second copy of the texture and doubles its memory. Mipmaps add a third more memory and are not needed for UI and 2D shown at a fixed size. World sprites that zoom far out may still need them.
-
-Q: Why keep source art uncompressed when using an atlas?
-A: The atlas decides the final format. If the source is compressed too, the picture is compressed twice and loses quality.
-
-Q: Why set Mesh Type to Tight, and when is it worse?
-A: Tight makes the mesh follow the sprite shape, so less empty transparent area is drawn. But a very complex outline makes many vertices. For small simple sprites Full Rect can be cheaper.
-
-Q: How do you slice a sprite sheet?
-A: Sprite Mode Multiple, then the Sprite Editor: automatic or by grid. When the image changes, I re-slice but keep the same sprite ids, so prefab links do not break.
-
-Q: How do you set a sprite pivot and why does it matter?
-A: In the Sprite Editor. The pivot is the point for position, rotation, scale, and sorting. For things standing on the ground I put it at the bottom.
-
-Q: What does Sprite Atlas "Include in Build" do?
-A: On: the atlas ships inside the game and loads with the sprites. Off: you must load it yourself, for example through Addressables.
-
-Q: A sprite has a thin line or halo at its edge. How do you fix it?
-A: Usually colour bleeds from neighbours in the atlas or from transparent pixels. I add atlas padding and turn on Alpha Is Transparency. I also check the edges in the source art.
-
-Q: The artist gives you a PSD with 200 layers. What do you do?
-A: We agree which layers must stay separate, because they move or change in the game. Everything else is merged into fewer sprites. Fewer sprites means less memory and fewer draw calls.
-
-Q: The artist wants a 4096 texture for a small icon. What do you say?
-A: I show it at real size on a phone next to a 512 version. If nobody sees a difference, we save the memory. If they do, we pick a middle size together.
-
-Q: How do you decide texture resolution for different devices?
-A: Max Size by the size on screen, and for weak devices smaller versions through quality tiers or Addressables variants (HD/SD). I check on a weak phone whether the difference is even visible.
 
 
 =====================================================================
@@ -389,51 +218,6 @@ More detail:
 - Guide: a local effect 20-100 live particles, a big screen burst 100-300.
 - One-shot effects: Looping off, one Burst, Local simulation space.
 - Props that must read clearly (hammers) - animated sprites, not particles.
-
-Q: How do you make a particle burst for a reward?
-A: Emission with one Burst, short lifetime, Size and Color over Lifetime for the pop and fade. Stop Action turns it off or returns it to the pool when it ends.
-
-Q: What does Simulation Space do?
-A: Local moves the particles together with the parent. World leaves them behind in the world, which is right for smoke or trails from a moving object.
-
-Q: How do you keep particle effects cheap on mobile?
-A: Few systems, one shared unlit material, low Max Particles and little overdraw. No real lights and no collisions. Effects off screen are paused by culling.
-
-Q: How do you decide how many particles is too many?
-A: I measure the effect on the weakest target phone together with the rest of the screen. Usually overdraw (how much screen the particles cover) is the limit before the particle count.
-
-Q: What if an effect must be very big for one moment?
-A: I make it short and keep other effects quiet at that moment. Fewer but bigger particles look big too. Then I test that exact frame on a weak phone.
-
-Q: Why use Prewarm?
-A: A looping effect with Prewarm starts as if it already ran once. So it does not look empty for the first second, for example smoke from a chimney.
-
-Q: How do you make an effect look the same every play?
-A: I turn off Auto Random Seed and set a fixed seed. Then the particles move the same way every time. This is useful for reviews and tests.
-
-Q: Additive or alpha blended particles?
-A: Additive for light, fire and sparks: it only makes things brighter. Alpha blend for smoke and dust that must cover what is behind. A white cloud on a light sky needs alpha, with additive it disappears.
-
-Q: What is a Sub Emitter?
-A: A particle system started by another one, when a particle is born, hits something or dies. For example a spark that bursts into smaller sparks. The child system needs its own burst.
-
-Q: How do you pool particle effects, and what goes wrong most often?
-A: When the effect ends (Stop Action Callback) it goes back to the pool, and I reset it when I take it again. Typical bugs: reusing an effect that is still playing, returning it twice, or old colour and scale left over. If Stop Action is Destroy, the pooled effect is simply gone.
-
-Q: What do you check if a particle effect does not appear?
-A: Is it playing and on screen, sorting layer and order, material and shader, Max Particles and emission. I also check the camera culling mask and Simulation Space.
-
-Q: How do you sort particles with sprites in 2D?
-A: The particle Renderer has Sorting Layer and Order in Layer, like a sprite. Particles over UI need a Screen Space - Camera Canvas and a layer above it.
-
-Q: Particle System or VFX Graph?
-A: Particle System for most mobile effects: it runs on the CPU and works everywhere. VFX Graph is for very many particles on devices with compute shaders. On phones without them VFX Graph shows nothing.
-
-Q: How do you keep VFX readable on a busy screen?
-A: A clear shape and timing, and contrast with the background. Not too many effects at once. The effect should support the gameplay moment, not hide it.
-
-Q: What are the most common VFX performance problems on mobile?
-A: Overdraw from big transparent particles in layers, too many particles, a different material for every system and effects that are calculated off screen. I fix them with size, count, a shared material and Culling Mode.
 
 
 =====================================================================
@@ -469,69 +253,6 @@ More detail:
 - UI that reacts to game state: the game holds the data, the UI only shows it (listens to a "coins changed" event).
   An animation never decides logic. Change text only when the number changed.
 
-Q: How do you set up a Canvas for a portrait mobile game?
-A: Canvas Scaler set to Scale With Screen Size, reference resolution 1080x2400, Match about 0.5-0.7. Buttons go inside a Safe Area root. Then I test on a tall phone and on a tablet.
-
-Q: How do anchors work in a RectTransform?
-A: Anchors are points on the parent rectangle. Anchors together give a fixed size; anchors apart make the element stretch with the parent. I set anchors and pivot first, then the position.
-
-Q: What is the difference between Content Size Fitter and a Layout Group?
-A: Content Size Fitter changes the size of its own object, for example a label to fit its text. A Layout Group places and sizes its children, but not itself. Putting both on one object often makes them fight.
-
-Q: Why can a big Canvas be slow?
-A: When one element changes, the whole Canvas rebuilds its mesh. A timer on a big screen can rebuild the whole screen every second. So I put static UI and often-changing UI on separate Canvases.
-
-Q: You split Canvases. How many is too many?
-A: Each Canvas adds its own draw calls, so too many also cost. I split by how often things change: static background, timers and counters, and each popup. Only where it removes a real rebuild.
-
-Q: What exactly causes a Canvas rebuild?
-A: Changing a colour, sprite, text, turning something on or off, or changing size and position inside a layout. Moving an object without a layout is cheaper but still marks the Canvas dirty.
-
-Q: What makes a UI button not react to clicks?
-A: Usually a missing EventSystem, a missing Graphic Raycaster, Raycast Target turned off, or an invisible Image on top that catches the tap. With the new Input System the EventSystem also needs InputSystemUIInputModule.
-
-Q: Why is Graphic Raycaster a cost?
-A: On every tap it checks all raycast targets on that Canvas. I turn Raycast Target off on decoration and remove the Raycaster from Canvases that take no input. If the whole background must be clickable, I use one invisible target, not every image.
-
-Q: How do you handle the notch on phones?
-A: I put the top and bottom bars inside a Safe Area root that follows Screen.safeArea. Backgrounds can still go under the notch, edge to edge. I never shrink the whole Canvas.
-
-Q: How do you fade a whole popup?
-A: A CanvasGroup on the popup root gives one alpha for everything inside. While it is hidden I also turn off interactable and blocksRaycasts, so it cannot be tapped.
-
-Q: How do you make a popup Show and Hide?
-A: Show: scale and fade in with a small overshoot, about 0.3-0.5 s. Hide is a faster reverse, about 0.2 s, without overshoot. Input is blocked during the change.
-
-Q: Mask or RectMask2D?
-A: RectMask2D for rectangles: it is cheaper and supports soft edges. Mask can use any shape, but it uses the stencil buffer and breaks batching more.
-
-Q: How do you make a scroll list with many items fast?
-A: I reuse a few item views while scrolling instead of creating one object per item. I use RectMask2D and put the list on its own Canvas. This way a list of 500 items costs like a list of 10.
-
-Q: How do you show a timer that updates every second without cost?
-A: I change the text only when the number changes, not every frame. The timer sits on its own small Canvas, so it does not rebuild the whole screen.
-
-Q: What if a Layout Group is slow?
-A: Layout Groups recalculate when children change. For a static layout I let it calculate once and then turn it off, or I use anchors. For long lists I reuse views.
-
-Q: How do you animate UI without breaking layouts?
-A: I animate a child inside the layout element, not the element the Layout Group controls. Otherwise the Layout Group resets the position every rebuild and fights the animation.
-
-Q: What is 9-slicing?
-A: I set borders on the sprite in the Sprite Editor. The corners stay the same and the edges and middle stretch. One small sprite can make a panel or button of any size.
-
-Q: Why should UI shaders use vertex color?
-A: Image color and CanvasGroup fade reach the shader as vertex color. If the shader ignores it, tint and fade stop working. A UI shader must also support masks.
-
-Q: How do you keep UI in sync with game data?
-A: The UI listens to events or reads one data source; it never owns the data. When the data changes, the view updates. Every screen can be rebuilt from the data, for example after a reload.
-
-Q: How do you make a reward flight: coins flying to the counter?
-A: Pooled icons fly from the source to the counter on a curve, with small delays between them. The counter punches when each icon lands. The real number is updated in the data at once; the text rolls up at the end.
-
-Q: What are the most common Canvas mistakes that kill performance?
-A: One huge Canvas where something changes all the time, and Raycast Target on every image. Also nested Layout Groups, an Animator on every button and full-screen transparent panels.
-
 
 =====================================================================
 8. 2D WORKFLOW: SPRITES, IMPORT, SORTING
@@ -562,12 +283,6 @@ More detail:
   So in the test I used one layer + Order in Layer ranges (sky -3100, island -2000, items -71..628,
   FX 1000, markers 2000, UI 3000).
 - A PSD with 200 layers: agree which layers move separately, merge the rest.
-
-Q: How does 2D render order work?
-A: Sorting Layer first, then Order in Layer, then distance to the camera. A Sorting Group makes an object made of many sprites sort as one.
-
-Q: How do you sort sprites by Y?
-A: In URP 2D: Transparency Sort Mode Custom Axis (0,1,0) on the Renderer 2D Data. The sprites share one layer and order, Sprite Sort Point is Pivot, and the pivot is at the bottom.
 
 
 =====================================================================
@@ -601,48 +316,6 @@ More detail:
 - Popup: Show 0.25-0.6 s with a small scale overshoot, Hide 0.15-0.3 s, CanvasGroup for the fade.
 - An Animator and a script never write the same transform - one of them goes on an empty parent.
 
-Q: How do Animator parameters work?
-A: There are Float, Int, Bool and Trigger. Code sets them with SetFloat, SetBool and SetTrigger. A Trigger resets itself when a transition uses it; a Bool stays until you change it.
-
-Q: Trigger or Bool?
-A: Bool for lasting states, like IsOpen. Trigger for one-time actions, like Show or Build. If two Triggers are set in one frame, one can stay and fire later by surprise, so I reset them or use Bools.
-
-Q: Why do Animator transitions sometimes feel late?
-A: Has Exit Time is on, so the transition waits for the clip, or the transition is long. For instant reaction to a tap I turn Exit Time off and use a short transition.
-
-Q: How do you show a UI animation while the game is paused?
-A: I set the Animator Update Mode to Unscaled Time, and particles to Unscaled Delta Time. At timeScale 0 normal time stops, so otherwise they freeze.
-
-Q: Animator or tween for a simple button pop?
-A: A tween or a short clip is fine. I avoid an Animator on every idle UI element, because an active Animator makes the Canvas rebuild every frame. After the clip I turn the Animator off.
-
-Q: Animator or code for a counter that rolls up numbers?
-A: Code or a tween, because the number comes from data. The Animator can do the fixed punch around it. Each tool does the part it is good at.
-
-Q: How do you sync a sound or VFX with an animation?
-A: With an Animation Event on the exact frame. I never check a value like "rotation equals 90", because Unity can skip that exact value between frames.
-
-Q: What should an animation never decide?
-A: Game logic, like whether a purchase worked or a reward was given. The animation only shows the result. For example, a reward given at the end of a clip is lost if the player closes the screen early.
-
-Q: How do you handle an animation that must stop on the last frame?
-A: Loop Time off on the clip, so the state stays at the end. For logic after it, I use an Animation Event on the last frame, not a timer.
-
-Q: What are Animation Layers used for?
-A: To play another animation on top of the base, for example only the upper body. Override replaces lower layers, Additive adds on top. An Avatar Mask limits a layer to some parts.
-
-Q: Why override bone or object values in LateUpdate?
-A: The Animator writes transforms after Update. If I change them in Update, the Animator overwrites my value. In LateUpdate my change comes last and stays.
-
-Q: When do you use Timeline?
-A: For one-time sequences with many objects and exact timing: an intro, a reward sequence, a level complete screen. For states that switch back and forth I use the Animator.
-
-Q: What is root motion and do you need it for UI?
-A: Root motion moves the object from the animation data itself, mostly for walking characters. For UI and most 2D effects I keep it off. Movement comes from the animated RectTransform or code.
-
-Q: Spine, 2D Animation or frame-by-frame - when which?
-A: Spine for characters with many animations, because one rig gives everything and uses little memory. 2D Animation is similar but built into Unity, without a licence. Frame-by-frame for short stylised moves, but every frame is a separate picture in memory.
-
 
 =====================================================================
 10. ADDRESSABLES AND REMOTE CONTENT
@@ -675,57 +348,6 @@ More detail:
   blocking loads, no Release.
 - My groups in the test: Local_Core, Shared_FX, Remote_Island_TeaHouse.
 
-Q: What usually takes the most build size?
-A: Textures. First compression, then a smaller Max Size per texture until it starts to look worse. Everything in the Resources folder always ships, so I keep it small.
-
-Q: The build is too big. Where do you start?
-A: The Build Report shows which assets are biggest. Usually textures, then audio and fonts. Then compression, removing unused content, and moving optional content to remote Addressables.
-
-Q: Memory grows every time a player opens a screen. What is it?
-A: Something is loaded and never released: Addressables without Release, objects not destroyed, or events still subscribed. I compare two Memory Profiler snapshots, before and after.
-
-Q: How do you use the Memory Profiler?
-A: I take a snapshot, do the action, take another and compare. I look for things that should be gone and what still holds them. It also shows if the growth is textures (content) or managed memory (code).
-
-Q: Why can Destroy not free memory right away?
-A: Destroy removes the object, but the texture or mesh it used stays loaded while anything still uses it. It is freed later by Resources.UnloadUnusedAssets or by releasing Addressables.
-
-Q: How do you load a scene without freezing?
-A: LoadSceneAsync with a loading screen, and heavy content loaded in the background with Addressables. I avoid big loads that block the main thread.
-
-Q: What is the difference between Resources and Addressables?
-A: Everything in Resources always ships in the build and is hard to unload. Addressables load from local or remote storage, handle dependencies, and can be released.
-
-Q: How would you split Addressables groups?
-A: By when the content is needed and how it changes. A local group for the core UI, fonts and shaders; remote groups per feature or per island. A player then downloads only what he uses.
-
-Q: What is a catalog in Addressables?
-A: The list of all addresses and where each bundle lives. With a remote catalog the game can find new content without a new app build.
-
-Q: How do you release memory from Addressables?
-A: Every LoadAssetAsync needs a Release, every InstantiateAsync needs a ReleaseInstance. A bundle unloads only when nothing uses it anymore.
-
-Q: Cannot Change or Can Change Post Release?
-A: Cannot Change for static content: changed assets go into new small update bundles, and old bundles stay valid. Can Change rebuilds the whole bundle, so players download all of it again.
-
-Q: How do you check Addressables duplicates?
-A: With the Analyze tool. An asset used by two groups without its own group is copied into both bundles. The fix is to give the shared asset its own group.
-
-Q: How do you ship a content update?
-A: "Update a Previous Build" with the content state file from the released version. Only changed remote content is rebuilt. I keep that file for every release.
-
-Q: How do you test remote content before release?
-A: A local server or test profile, build the content, and run the game against it. I test updates and bad cases too: missing files, slow network, offline start.
-
-Q: What if Addressables loading fails on a bad network?
-A: I handle the failed operation: show a retry button, use local content if possible, and release the handle. The player never sees a frozen screen.
-
-Q: What if a player has an old catalog and new code?
-A: Remote content must work with the code that is already shipped. New code that needs new content comes with an app update, or checks the content version first.
-
-Q: How do you check Addressables groups before a release?
-A: Analyze for duplicates, build the content, run the game against a local test server. I also check the bad cases: no network, a slow network, a missing file, an offline start.
-
 
 =====================================================================
 11. PROFILER AND FRAME DEBUGGER (often a live test)
@@ -756,24 +378,6 @@ More detail:
 - Live test "optimize to X ms": first CPU/GPU, then the biggest marker, each change separately,
   name the trade-off out loud.
 
-Q: How do you fit a 2D camera for different phones?
-A: I choose the orthographic size from the content, so it fits the narrowest phone. Wider screens and tablets simply show more around it. I test the narrowest screen, not only the Game view.
-
-Q: What if the game must support both short and very tall phones?
-A: Safe area and anchors, and I test the extremes: 4:3 and 9:20. Backgrounds go past the safe area, buttons stay inside it.
-
-Q: A screen looked fine in the Editor but is blurry on the phone. Why?
-A: Usually the texture Max Size or compression for that platform, a wrong Canvas Scaler, or a sprite scaled up above its real size. I check the platform settings of the texture first.
-
-Q: Text looks different on the device than in the Editor. What do you check?
-A: The font asset, its fallback fonts, missing letters, and the Canvas Scaler. Fallback fonts can sit at a different height, so I check them with my eyes.
-
-Q: What do you check first when a sprite looks wrong in the game?
-A: I go step by step: source art, import settings (slicing, pivot, PPU, compression), prefab, animation, shader, runtime state, loading. Turning systems off one by one shows which one is guilty.
-
-Q: How do you find where an error comes from in a build?
-A: The Player.log file with stack traces turned on, or logcat on Android and the Xcode console on iOS. The Unity Console shows only the Editor.
-
 
 =====================================================================
 12. PREFABS AND VARIANTS FOR LIVE EVENTS
@@ -802,27 +406,6 @@ More detail:
 - In the test: base BuildableItem_Base (ObjectVisual, ShadowVisual, anchors, three states), seven direct variants.
 - Never "Apply All" from a variant - it changes the base and every other variant.
 - Renamed an animated child - the clip silently loses it (the path is by name).
-
-Q: What is the difference between a prefab variant and a nested prefab?
-A: A nested prefab is a prefab placed inside another prefab, like a marker inside an item. A variant is a copy of a base prefab that keeps only its differences. I keep the chain short: the base plus one level.
-
-Q: How do you apply or revert prefab overrides safely?
-A: I open the Overrides list first to see exactly what changed. Then I apply only what really belongs to the base and revert my local experiments. I never press "Apply All" from a variant, because it changes every other variant too.
-
-Q: What happens if you rename a child that is animated?
-A: The animation clip finds children by their path name, so it silently loses that child. Nothing shows an error, the object just stops moving. So I rename first and animate after.
-
-Q: When do you use ScriptableObjects?
-A: For shared data and settings: item lists, prices, rewards, tuning numbers. One asset can feed many prefabs. Designers change the values without touching code or scenes.
-
-Q: What happens if you delete a .meta file?
-A: Unity creates a new GUID for the asset, and every link to it breaks. Sprite slices stored in the .meta are lost too. That is why the .meta must always be committed with its asset.
-
-Q: When do you use object pooling?
-A: For things created often: coins, bullets, reward effects, list items. Reusing them avoids lag spikes from creating and destroying objects. Rare screens do not need a pool.
-
-Q: What is the difference between Destroy and SetActive(false)?
-A: SetActive(false) only hides the object; it stays in memory, ready to use again. Destroy removes it completely. Objects that come back often I hide or pool instead of destroying.
 
 
 =====================================================================
@@ -853,66 +436,6 @@ More detail:
 - My tool in the test: PSD to Scene - a PSD into a scene keeping layer positions.
 - AI tools (job post bonus): drafts of tools, explaining code, routine work. I check: compile, tests,
   every API name in the docs for our Unity version.
-
-Q: What is the difference between EditMode and PlayMode tests?
-A: EditMode tests run in the Editor without Play, good for tools and data. PlayMode tests run real frames, good for gameplay and UI flow.
-
-Q: Why does a test fail with "Unhandled log message"?
-A: Any Debug.LogError during a test fails it. If the error is expected, I tell the test with LogAssert.Expect.
-
-Q: How do you run Unity tests in CI?
-A: Unity -batchmode -runTests with -testPlatform and -testResults. The results file shows passed and failed tests.
-
-Q: What makes a good test in Unity?
-A: It checks behaviour, not hierarchy names. It does not depend on the open scene, it cleans up after itself, and it fails with a clear message.
-
-Q: What if a test is flaky?
-A: I find the cause: timing, shared state or the open scene. I wait for a condition, not for a longer time.
-
-Q: Why do you write tests for editor tools?
-A: Tools change assets for the whole team. A test proves the tool does the right thing and keeps it working when Unity or the project changes.
-
-Q: How do you make an editor tool safe for artists?
-A: Undo for every change, clear error messages instead of silent defaults, and a preview before applying. It only touches the folders it should.
-
-Q: How do you keep a tool from being abandoned?
-A: It solves a real repeated task and is simple to use, with a short guide. I watch the first artists use it and fix what confuses them.
-
-Q: How do you make an Inspector easier for artists?
-A: Clear field names, sliders ([Range]), tooltips and headers. Fields they should not touch are hidden. For bigger tools, a custom editor window.
-
-Q: When do you write an AssetPostprocessor?
-A: To apply import rules automatically by folder, like compression and Max Size. Then nobody can import a texture with wrong settings by accident.
-
-Q: How do you validate content before a build?
-A: An editor check that finds missing links, wrong import settings and too many materials. It fails with a clear list, so the problem is fixed before release.
-
-Q: Why do files written from outside Unity not appear?
-A: Unity imports files when the window gets focus or on AssetDatabase.Refresh. A script that writes files must call Refresh before using them.
-
-Q: How do you avoid merge conflicts in scenes and prefabs?
-A: Small prefabs instead of one big scene, and clear owners for each part. Scenes are saved as text (Force Text), so Git can merge them, with UnityYAMLMerge as the merge tool.
-
-Q: How do you handle a merge conflict in a scene?
-A: I try UnityYAMLMerge first. If it fails, I take one side and redo the other change in the Editor, then check the scene works.
-
-Q: What goes into .gitignore for Unity?
-A: Library, Temp, Obj, Logs, Build and UserSettings folders, plus IDE files. Assets, Packages and ProjectSettings stay in Git.
-
-Q: Why use Git LFS for art?
-A: Big binary files like PSD and FBX make the Git history huge. LFS stores them outside the normal history.
-
-Q: How do you review a prefab in a pull request?
-A: I open it in Unity, not only the text diff. I check the hierarchy, links, overrides, and that it works in its scene.
-
-Q: What do you do when a teammate's prefab change breaks your screen?
-A: I find the exact change in Git history and talk to the owner. We agree on a fix together; I do not silently overwrite their work.
-
-Q: What is the first thing you check in someone else's prefab?
-A: Missing links, the hierarchy and names, and which components do the real work. Then overrides on instances in scenes that could break.
-
-Q: How do you make the team follow import and naming rules?
-A: I make the rules automatic: import presets per folder and a validator that blocks wrong things with a clear error. A document is needed, but alone it does not work, while a tool works every time.
 
 
 =====================================================================
@@ -966,9 +489,6 @@ More detail:
 - Memory grows every time a screen opens = something is not unloaded: Addressables without Release, objects, subscriptions.
 - Destroy does not free a texture at once - it lives while something references it.
 - Build too big: Build Report, biggest first - textures, then audio and fonts. Resources always ships.
-
-Q: Tell me how you would fix memory crashes on weak phones.
-A: A Memory Profiler snapshot on that phone - which textures are biggest and what did not unload. I lower Max Size, set the right compression, add Releases and a validator on texture size, so the problem does not come back.
 
 
 =====================================================================
@@ -1094,7 +614,546 @@ Questions to ask them at the end (sound senior):
 - What device quality tiers and test plan do you have?
 - Which Tech Art problem on the project would you like someone to solve in the next 6-12 months?
 
-More questions:
+
+=====================================================================
+QUESTIONS ABOUT MY HOME ASSIGNMENT (they discuss it in the interview)
+=====================================================================
+
+What will happen:
+After the assignment - a review: "why this way", "what else did you consider", "how does it scale to events",
+"how did you check it", "what would you improve", "how would you make it data-driven for designers".
+
+What I did (short):
+- The island from sprites under an orthographic camera; bar and navigation - a Canvas with Canvas Scaler 1080x2400 and Safe Area.
+- The PSD brought in with my PSD to Scene tool.
+- Base BuildableItem_Base with three states + seven direct variants.
+- Animator: Available -> trigger Build -> one BuildSequence clip -> Built. The item pops at 1.1 s
+  (0.85 -> 1.06 -> 1.0), all by ~1.4 s; the next action is available in under 2 s.
+- The cloud - one particle, a 4x4 flipbook, alpha blend. Hammers - sprites with the pivot near the handle.
+- Atlases UI_Core and Island (items together with their shadows). Addressables: Local_Core, Shared_FX, Remote_Island_TeaHouse.
+
+
+=====================================================================
+HOW I WORK (job post: mockup -> feature, ownership, communication)
+=====================================================================
+
+Short: break down the mockup (states, data, taps) -> ask what is missing -> prototype -> base prefab and Canvas ->
+animation and FX -> connect to game state -> two screens, performance, memory, loading -> variants and Addressables.
+
+
+=====================================================================
+QUESTIONS AND ANSWERS (by the topics of block 1)
+=====================================================================
+
+--- 1. PERFORMANCE ON MOBILE (asked most often) ---
+
+Q: What is a draw call and a batch?
+A: A draw call is a request from the CPU to the GPU to draw something. A batch joins several compatible draw calls into one. Fewer calls mean less CPU time.
+
+Q: Why does the Stats window show fewer batches but the frame is not faster?
+A: Batches are CPU work. The limit can be the GPU instead, for example overdraw or heavy shaders. So I check both CPU and GPU time.
+
+Q: What is overdraw and how do you reduce it?
+A: Drawing the same pixel many times with transparent layers. I use tight meshes, fewer full-screen transparent images and smaller particles. The Overdraw view shows the hot spots.
+
+Q: What is fill rate and why does it matter on mobile?
+A: How many pixels the GPU can draw per second. Phones have little, so big transparent layers and big particles cost a lot.
+
+Q: What frame budget do you target?
+A: 16.6 ms per frame for 60 fps, 33.3 ms for 30 fps. I leave a margin, because phones heat up and slow down. I watch the worst frames, not only the average.
+
+Q: How do you read the Profiler when the game is slow?
+A: I profile a development build on the phone. If the render thread waits in Gfx.PresentFrame, the GPU is the limit; otherwise the CPU. Then I sort by Self time to find the slow function.
+
+Q: Why is profiling in the Editor not enough?
+A: The Editor adds its own work to the numbers, and a PC is much faster than a phone. I use the Editor only to iterate on problems I first found on the device. I also test a release build, because some problems show only there.
+
+Q: What is GC.Alloc and why care?
+A: Memory created in this frame that later becomes garbage. More garbage means more pauses when Unity cleans it. I keep it at zero per frame and use Call Stacks to find where it comes from.
+
+Q: What creates garbage in UI code that people forget?
+A: Formatting text every frame, GetComponent in Update, and new lists. I update text only when the value changes and use SetText. FindObjectOfType in gameplay is bad too: it searches the whole scene.
+
+Q: The frame rate is fine but the game feels stuttery. Why?
+A: Some frames are much slower than the rest: garbage collection, loading or shader compile. Average FPS hides them. I look at the frame time graph and the worst frames.
+
+Q: How do you prove an optimization helped?
+A: Same phone, same scene, same actions, before and after. I give numbers, like 14.2 ms to 10.8 ms. I also look at the worst frames.
+
+Q: A popup opens with a visible hitch. What do you check?
+A: The Profiler on that frame: creating objects, texture upload, shader compile, layout rebuild, garbage. Then I fix the biggest one: pool or preload the popup, or prewarm the shader.
+
+Q: Why test on a low-end device?
+A: Problems show there first. If it runs well on a weak phone, a strong one is usually fine. I also test long sessions, because phones slow down when they get hot.
+
+Q: What is the difference between Update, FixedUpdate and LateUpdate?
+A: Update runs every frame, FixedUpdate on the physics step, LateUpdate after animation. Camera follow goes in LateUpdate.
+
+Q: Why use Time.deltaTime?
+A: So movement is per second, not per frame. Without it, objects move slower when the frame rate drops.
+
+Q: What three things do you check first when a mobile scene is too heavy?
+A: Whether it is CPU or GPU (Profiler on the phone), then the biggest marker on the main thread (Canvas, particles, garbage), then overdraw in the Frame Debugger. I measure each change separately.
+
+Q: How do you balance quality and performance in a live game on many devices?
+A: Quality tiers (low/mid/high) with a budget for each. On weak phones fewer particles, lower resolution, no post-processing; on strong ones full beauty. I decide by numbers, not by eye.
+
+--- 2. SHADERS (Shader Graph, math, cost on mobile) ---
+
+Q: What is the SRP Batcher?
+A: In URP it makes draw calls cheaper for objects that use the same shader variant, even with different materials. The shader must keep its material properties in the UnityPerMaterial buffer.
+
+Q: What breaks SRP Batcher compatibility?
+A: A shader without the UnityPerMaterial buffer, or a MaterialPropertyBlock on the renderer. The shader Inspector shows if it is compatible.
+
+Q: How do keywords affect batching?
+A: Every keyword combination is a different shader variant. Two materials with the same shader but different keywords do not batch together. Fewer keywords, more batching.
+
+Q: shader_feature or multi_compile?
+A: shader_feature when the option is set on the material; unused variants are removed from the build. multi_compile when code switches it at runtime; all combinations are built, so the build grows.
+
+Q: What does a magenta or cyan object mean?
+A: Magenta is the error shader: missing, broken, or a Built-in shader in URP. Cyan means the shader is still compiling. If it is pink only on the device, a variant was probably removed from the build.
+
+Q: A shader variant freezes the game on first use. How do you avoid it?
+A: I prewarm it during loading with ShaderVariantCollection.WarmUp. Then the first real use does not stall the frame.
+
+Q: Sprite-Lit or Sprite-Unlit?
+A: Sprite-Lit reacts to Light 2D, Sprite-Unlit ignores lights and is cheaper. Unlit is good for UI-like sprites and effects that glow by themselves.
+
+Q: How do you animate a material without breaking batching?
+A: I animate a shared value or use shader time, plus a small per-object difference in vertex colour. In URP a MaterialPropertyBlock takes the object out of the SRP Batcher, so I avoid it.
+
+Q: How do you make a dissolve effect?
+A: A noise texture is compared with a threshold; pixels below it disappear. A thin bright edge near the threshold looks like burning. Animating the threshold from 0 to 1 dissolves the object.
+
+Q: How do you make a UV scroll for water or energy?
+A: I move the UV by time multiplied by speed and repeat the texture. Two layers moving at different speeds look much richer.
+
+Q: What is a Shader Graph Sub Graph for?
+A: For reusing a group of nodes, like dissolve or UV scroll, in many graphs. One fix in the Sub Graph updates all of them.
+
+Q: If a shader is slow on one phone only, what do you do?
+A: I capture a frame on that phone and look for heavy math, many texture reads or discard. Then I simplify it, use half precision, or move work from pixels to vertices.
+
+Q: Is alpha clipping cheaper than transparency?
+A: Not always. On phone GPUs clipping (discard) turns off an early optimization and can cost more than blending. I measure on the device and choose per effect.
+
+Q: How do you make light effects in URP 2D?
+A: Light 2D components with the 2D Renderer, and normal maps for volume if needed. Things that glow by themselves use unlit sprites with Bloom. Real lights per particle are too expensive.
+
+Q: What is the dot product and where do you use it?
+A: A number that says how much two directions point the same way: 1 - the same, 0 - at a right angle, -1 - opposite. I use it for lighting (normal and light), for a rim around an object (normal and view) and for angle-based masks.
+
+Q: What is the difference between a vertex and a fragment shader?
+A: The vertex shader runs once per vertex, the fragment shader once per pixel. There are many more pixels, so smooth calculations that can be interpolated I move to the vertex shader.
+
+Q: When half and when float?
+A: half for colour, directions and small numbers: it is faster on phones. float for world positions, ever-growing time and big UVs, because half loses precision there and the picture shakes.
+
+Q: When do you write HLSL instead of Shader Graph?
+A: When I need exact cost control, custom lighting or a port of an existing shader. Otherwise Shader Graph, because others can edit it. But I must be able to read simple HLSL to find what is expensive.
+
+Q: Make a dissolve in 5 minutes in the interview - how?
+A: Noise -> compare with a Dissolve Amount slider through Step (or Smoothstep for a soft edge) -> that is the alpha. For a glowing edge - a narrow band near the threshold, multiplied by an edge colour and added to the colour. I expose parameters: threshold, edge width, colour.
+
+--- 3. RENDER PIPELINE: BUILT-IN, URP, HDRP ---
+
+Q: Forward or Deferred for a mobile 2D game?
+A: Forward. Deferred keeps several full-screen textures and does extra passes, and phones are limited in memory and bandwidth. A 2D game rarely needs dozens of lights per pixel.
+
+Q: Everything is pink after moving to URP. What do you do?
+A: The materials still use Built-in shaders. I run the Render Pipeline Converter and remake custom shaders in Shader Graph.
+
+Q: Why can you not drop the 2D Renderer into Graphics settings?
+A: Graphics and Quality take a pipeline asset (UniversalRP), and the 2D Renderer is a renderer inside it. It goes into UniversalRP's Renderer List.
+
+--- 4. DRAW CALLS AND BATCHING ---
+
+Q: What is the difference between static batching, dynamic batching, GPU instancing and the SRP Batcher?
+A: Static merges non-moving meshes at build time, dynamic merges small meshes every frame. Instancing draws many copies of one mesh in one command, and the SRP Batcher does not reduce commands but makes each cheap for the same shader. For 2D sprites in URP the main ones are the SRP Batcher and atlases.
+
+Q: How do you set up atlases for UI and 2D, and what problems did you see?
+A: One atlas per screen or feature, UI separate from world art, big backgrounds and flipbooks outside atlases. Problems: an atlas that grows forever, a sprite on a second atlas page, and broken batches because of draw order.
+
+--- 5. TEXTURES AND COMPRESSION ---
+
+Q: What is Pixels Per Unit?
+A: How many pixels of a sprite make one Unity unit. I keep one PPU for a whole art set, so sizes match. Double PPU makes the sprite half as big.
+
+Q: What is a Sprite Atlas for?
+A: It packs many sprites into one texture, so they draw in fewer draw calls. I group sprites that appear on the same screen.
+
+Q: Why not one big atlas for the whole game?
+A: The whole atlas stays in memory while any sprite from it is used. A screen that needs one icon would load everything. So I make one atlas per screen or feature.
+
+Q: When does a sprite not batch even in the same atlas?
+A: When it uses a different material, or when something else with another texture is drawn between them. Sorting order matters, not only the atlas.
+
+Q: How do you plan atlases for a screen?
+A: I group sprites shown together and keep UI apart from world art. Soft shadows and gradients go into their own atlas with a cheaper compression.
+
+Q: How do you choose texture compression for mobile?
+A: ASTC: 4x4 for sharp UI and small text, 6x6 for items, 8x8 for soft shadows and gradients. ETC2 as a fallback for old Android. I compare the result on a real phone.
+
+Q: Why turn off Read/Write and mipmaps?
+A: Read/Write keeps a second copy of the texture and doubles its memory. Mipmaps add a third more memory and are not needed for UI and 2D shown at a fixed size. World sprites that zoom far out may still need them.
+
+Q: Why keep source art uncompressed when using an atlas?
+A: The atlas decides the final format. If the source is compressed too, the picture is compressed twice and loses quality.
+
+Q: Why set Mesh Type to Tight, and when is it worse?
+A: Tight makes the mesh follow the sprite shape, so less empty transparent area is drawn. But a very complex outline makes many vertices. For small simple sprites Full Rect can be cheaper.
+
+Q: How do you slice a sprite sheet?
+A: Sprite Mode Multiple, then the Sprite Editor: automatic or by grid. When the image changes, I re-slice but keep the same sprite ids, so prefab links do not break.
+
+Q: How do you set a sprite pivot and why does it matter?
+A: In the Sprite Editor. The pivot is the point for position, rotation, scale, and sorting. For things standing on the ground I put it at the bottom.
+
+Q: What does Sprite Atlas "Include in Build" do?
+A: On: the atlas ships inside the game and loads with the sprites. Off: you must load it yourself, for example through Addressables.
+
+Q: A sprite has a thin line or halo at its edge. How do you fix it?
+A: Usually colour bleeds from neighbours in the atlas or from transparent pixels. I add atlas padding and turn on Alpha Is Transparency. I also check the edges in the source art.
+
+Q: The artist gives you a PSD with 200 layers. What do you do?
+A: We agree which layers must stay separate, because they move or change in the game. Everything else is merged into fewer sprites. Fewer sprites means less memory and fewer draw calls.
+
+Q: The artist wants a 4096 texture for a small icon. What do you say?
+A: I show it at real size on a phone next to a 512 version. If nobody sees a difference, we save the memory. If they do, we pick a middle size together.
+
+Q: How do you decide texture resolution for different devices?
+A: Max Size by the size on screen, and for weak devices smaller versions through quality tiers or Addressables variants (HD/SD). I check on a weak phone whether the difference is even visible.
+
+--- 6. PARTICLES AND VFX ---
+
+Q: How do you make a particle burst for a reward?
+A: Emission with one Burst, short lifetime, Size and Color over Lifetime for the pop and fade. Stop Action turns it off or returns it to the pool when it ends.
+
+Q: What does Simulation Space do?
+A: Local moves the particles together with the parent. World leaves them behind in the world, which is right for smoke or trails from a moving object.
+
+Q: How do you keep particle effects cheap on mobile?
+A: Few systems, one shared unlit material, low Max Particles and little overdraw. No real lights and no collisions. Effects off screen are paused by culling.
+
+Q: How do you decide how many particles is too many?
+A: I measure the effect on the weakest target phone together with the rest of the screen. Usually overdraw (how much screen the particles cover) is the limit before the particle count.
+
+Q: What if an effect must be very big for one moment?
+A: I make it short and keep other effects quiet at that moment. Fewer but bigger particles look big too. Then I test that exact frame on a weak phone.
+
+Q: Why use Prewarm?
+A: A looping effect with Prewarm starts as if it already ran once. So it does not look empty for the first second, for example smoke from a chimney.
+
+Q: How do you make an effect look the same every play?
+A: I turn off Auto Random Seed and set a fixed seed. Then the particles move the same way every time. This is useful for reviews and tests.
+
+Q: Additive or alpha blended particles?
+A: Additive for light, fire and sparks: it only makes things brighter. Alpha blend for smoke and dust that must cover what is behind. A white cloud on a light sky needs alpha, with additive it disappears.
+
+Q: What is a Sub Emitter?
+A: A particle system started by another one, when a particle is born, hits something or dies. For example a spark that bursts into smaller sparks. The child system needs its own burst.
+
+Q: How do you pool particle effects, and what goes wrong most often?
+A: When the effect ends (Stop Action Callback) it goes back to the pool, and I reset it when I take it again. Typical bugs: reusing an effect that is still playing, returning it twice, or old colour and scale left over. If Stop Action is Destroy, the pooled effect is simply gone.
+
+Q: What do you check if a particle effect does not appear?
+A: Is it playing and on screen, sorting layer and order, material and shader, Max Particles and emission. I also check the camera culling mask and Simulation Space.
+
+Q: How do you sort particles with sprites in 2D?
+A: The particle Renderer has Sorting Layer and Order in Layer, like a sprite. Particles over UI need a Screen Space - Camera Canvas and a layer above it.
+
+Q: Particle System or VFX Graph?
+A: Particle System for most mobile effects: it runs on the CPU and works everywhere. VFX Graph is for very many particles on devices with compute shaders. On phones without them VFX Graph shows nothing.
+
+Q: How do you keep VFX readable on a busy screen?
+A: A clear shape and timing, and contrast with the background. Not too many effects at once. The effect should support the gameplay moment, not hide it.
+
+Q: What are the most common VFX performance problems on mobile?
+A: Overdraw from big transparent particles in layers, too many particles, a different material for every system and effects that are calculated off screen. I fix them with size, count, a shared material and Culling Mode.
+
+--- 7. UI (Canvas, uGUI, TextMeshPro) ---
+
+Q: How do you set up a Canvas for a portrait mobile game?
+A: Canvas Scaler set to Scale With Screen Size, reference resolution 1080x2400, Match about 0.5-0.7. Buttons go inside a Safe Area root. Then I test on a tall phone and on a tablet.
+
+Q: How do anchors work in a RectTransform?
+A: Anchors are points on the parent rectangle. Anchors together give a fixed size; anchors apart make the element stretch with the parent. I set anchors and pivot first, then the position.
+
+Q: What is the difference between Content Size Fitter and a Layout Group?
+A: Content Size Fitter changes the size of its own object, for example a label to fit its text. A Layout Group places and sizes its children, but not itself. Putting both on one object often makes them fight.
+
+Q: Why can a big Canvas be slow?
+A: When one element changes, the whole Canvas rebuilds its mesh. A timer on a big screen can rebuild the whole screen every second. So I put static UI and often-changing UI on separate Canvases.
+
+Q: You split Canvases. How many is too many?
+A: Each Canvas adds its own draw calls, so too many also cost. I split by how often things change: static background, timers and counters, and each popup. Only where it removes a real rebuild.
+
+Q: What exactly causes a Canvas rebuild?
+A: Changing a colour, sprite, text, turning something on or off, or changing size and position inside a layout. Moving an object without a layout is cheaper but still marks the Canvas dirty.
+
+Q: What makes a UI button not react to clicks?
+A: Usually a missing EventSystem, a missing Graphic Raycaster, Raycast Target turned off, or an invisible Image on top that catches the tap. With the new Input System the EventSystem also needs InputSystemUIInputModule.
+
+Q: Why is Graphic Raycaster a cost?
+A: On every tap it checks all raycast targets on that Canvas. I turn Raycast Target off on decoration and remove the Raycaster from Canvases that take no input. If the whole background must be clickable, I use one invisible target, not every image.
+
+Q: How do you handle the notch on phones?
+A: I put the top and bottom bars inside a Safe Area root that follows Screen.safeArea. Backgrounds can still go under the notch, edge to edge. I never shrink the whole Canvas.
+
+Q: How do you fade a whole popup?
+A: A CanvasGroup on the popup root gives one alpha for everything inside. While it is hidden I also turn off interactable and blocksRaycasts, so it cannot be tapped.
+
+Q: How do you make a popup Show and Hide?
+A: Show: scale and fade in with a small overshoot, about 0.3-0.5 s. Hide is a faster reverse, about 0.2 s, without overshoot. Input is blocked during the change.
+
+Q: Mask or RectMask2D?
+A: RectMask2D for rectangles: it is cheaper and supports soft edges. Mask can use any shape, but it uses the stencil buffer and breaks batching more.
+
+Q: How do you make a scroll list with many items fast?
+A: I reuse a few item views while scrolling instead of creating one object per item. I use RectMask2D and put the list on its own Canvas. This way a list of 500 items costs like a list of 10.
+
+Q: How do you show a timer that updates every second without cost?
+A: I change the text only when the number changes, not every frame. The timer sits on its own small Canvas, so it does not rebuild the whole screen.
+
+Q: What if a Layout Group is slow?
+A: Layout Groups recalculate when children change. For a static layout I let it calculate once and then turn it off, or I use anchors. For long lists I reuse views.
+
+Q: How do you animate UI without breaking layouts?
+A: I animate a child inside the layout element, not the element the Layout Group controls. Otherwise the Layout Group resets the position every rebuild and fights the animation.
+
+Q: What is 9-slicing?
+A: I set borders on the sprite in the Sprite Editor. The corners stay the same and the edges and middle stretch. One small sprite can make a panel or button of any size.
+
+Q: Why should UI shaders use vertex color?
+A: Image color and CanvasGroup fade reach the shader as vertex color. If the shader ignores it, tint and fade stop working. A UI shader must also support masks.
+
+Q: How do you keep UI in sync with game data?
+A: The UI listens to events or reads one data source; it never owns the data. When the data changes, the view updates. Every screen can be rebuilt from the data, for example after a reload.
+
+Q: How do you make a reward flight: coins flying to the counter?
+A: Pooled icons fly from the source to the counter on a curve, with small delays between them. The counter punches when each icon lands. The real number is updated in the data at once; the text rolls up at the end.
+
+Q: What are the most common Canvas mistakes that kill performance?
+A: One huge Canvas where something changes all the time, and Raycast Target on every image. Also nested Layout Groups, an Animator on every button and full-screen transparent panels.
+
+--- 8. 2D WORKFLOW: SPRITES, IMPORT, SORTING ---
+
+Q: How does 2D render order work?
+A: Sorting Layer first, then Order in Layer, then distance to the camera. A Sorting Group makes an object made of many sprites sort as one.
+
+Q: How do you sort sprites by Y?
+A: In URP 2D: Transparency Sort Mode Custom Axis (0,1,0) on the Renderer 2D Data. The sprites share one layer and order, Sprite Sort Point is Pivot, and the pivot is at the bottom.
+
+--- 9. ANIMATION (Animator, tweens, 2D skeletons) ---
+
+Q: How do Animator parameters work?
+A: There are Float, Int, Bool and Trigger. Code sets them with SetFloat, SetBool and SetTrigger. A Trigger resets itself when a transition uses it; a Bool stays until you change it.
+
+Q: Trigger or Bool?
+A: Bool for lasting states, like IsOpen. Trigger for one-time actions, like Show or Build. If two Triggers are set in one frame, one can stay and fire later by surprise, so I reset them or use Bools.
+
+Q: Why do Animator transitions sometimes feel late?
+A: Has Exit Time is on, so the transition waits for the clip, or the transition is long. For instant reaction to a tap I turn Exit Time off and use a short transition.
+
+Q: How do you show a UI animation while the game is paused?
+A: I set the Animator Update Mode to Unscaled Time, and particles to Unscaled Delta Time. At timeScale 0 normal time stops, so otherwise they freeze.
+
+Q: Animator or tween for a simple button pop?
+A: A tween or a short clip is fine. I avoid an Animator on every idle UI element, because an active Animator makes the Canvas rebuild every frame. After the clip I turn the Animator off.
+
+Q: Animator or code for a counter that rolls up numbers?
+A: Code or a tween, because the number comes from data. The Animator can do the fixed punch around it. Each tool does the part it is good at.
+
+Q: How do you sync a sound or VFX with an animation?
+A: With an Animation Event on the exact frame. I never check a value like "rotation equals 90", because Unity can skip that exact value between frames.
+
+Q: What should an animation never decide?
+A: Game logic, like whether a purchase worked or a reward was given. The animation only shows the result. For example, a reward given at the end of a clip is lost if the player closes the screen early.
+
+Q: How do you handle an animation that must stop on the last frame?
+A: Loop Time off on the clip, so the state stays at the end. For logic after it, I use an Animation Event on the last frame, not a timer.
+
+Q: What are Animation Layers used for?
+A: To play another animation on top of the base, for example only the upper body. Override replaces lower layers, Additive adds on top. An Avatar Mask limits a layer to some parts.
+
+Q: Why override bone or object values in LateUpdate?
+A: The Animator writes transforms after Update. If I change them in Update, the Animator overwrites my value. In LateUpdate my change comes last and stays.
+
+Q: When do you use Timeline?
+A: For one-time sequences with many objects and exact timing: an intro, a reward sequence, a level complete screen. For states that switch back and forth I use the Animator.
+
+Q: What is root motion and do you need it for UI?
+A: Root motion moves the object from the animation data itself, mostly for walking characters. For UI and most 2D effects I keep it off. Movement comes from the animated RectTransform or code.
+
+Q: Spine, 2D Animation or frame-by-frame - when which?
+A: Spine for characters with many animations, because one rig gives everything and uses little memory. 2D Animation is similar but built into Unity, without a licence. Frame-by-frame for short stylised moves, but every frame is a separate picture in memory.
+
+--- 10. ADDRESSABLES AND REMOTE CONTENT ---
+
+Q: What usually takes the most build size?
+A: Textures. First compression, then a smaller Max Size per texture until it starts to look worse. Everything in the Resources folder always ships, so I keep it small.
+
+Q: The build is too big. Where do you start?
+A: The Build Report shows which assets are biggest. Usually textures, then audio and fonts. Then compression, removing unused content, and moving optional content to remote Addressables.
+
+Q: Memory grows every time a player opens a screen. What is it?
+A: Something is loaded and never released: Addressables without Release, objects not destroyed, or events still subscribed. I compare two Memory Profiler snapshots, before and after.
+
+Q: How do you use the Memory Profiler?
+A: I take a snapshot, do the action, take another and compare. I look for things that should be gone and what still holds them. It also shows if the growth is textures (content) or managed memory (code).
+
+Q: Why can Destroy not free memory right away?
+A: Destroy removes the object, but the texture or mesh it used stays loaded while anything still uses it. It is freed later by Resources.UnloadUnusedAssets or by releasing Addressables.
+
+Q: How do you load a scene without freezing?
+A: LoadSceneAsync with a loading screen, and heavy content loaded in the background with Addressables. I avoid big loads that block the main thread.
+
+Q: What is the difference between Resources and Addressables?
+A: Everything in Resources always ships in the build and is hard to unload. Addressables load from local or remote storage, handle dependencies, and can be released.
+
+Q: How would you split Addressables groups?
+A: By when the content is needed and how it changes. A local group for the core UI, fonts and shaders; remote groups per feature or per island. A player then downloads only what he uses.
+
+Q: What is a catalog in Addressables?
+A: The list of all addresses and where each bundle lives. With a remote catalog the game can find new content without a new app build.
+
+Q: How do you release memory from Addressables?
+A: Every LoadAssetAsync needs a Release, every InstantiateAsync needs a ReleaseInstance. A bundle unloads only when nothing uses it anymore.
+
+Q: Cannot Change or Can Change Post Release?
+A: Cannot Change for static content: changed assets go into new small update bundles, and old bundles stay valid. Can Change rebuilds the whole bundle, so players download all of it again.
+
+Q: How do you check Addressables duplicates?
+A: With the Analyze tool. An asset used by two groups without its own group is copied into both bundles. The fix is to give the shared asset its own group.
+
+Q: How do you ship a content update?
+A: "Update a Previous Build" with the content state file from the released version. Only changed remote content is rebuilt. I keep that file for every release.
+
+Q: How do you test remote content before release?
+A: A local server or test profile, build the content, and run the game against it. I test updates and bad cases too: missing files, slow network, offline start.
+
+Q: What if Addressables loading fails on a bad network?
+A: I handle the failed operation: show a retry button, use local content if possible, and release the handle. The player never sees a frozen screen.
+
+Q: What if a player has an old catalog and new code?
+A: Remote content must work with the code that is already shipped. New code that needs new content comes with an app update, or checks the content version first.
+
+Q: How do you check Addressables groups before a release?
+A: Analyze for duplicates, build the content, run the game against a local test server. I also check the bad cases: no network, a slow network, a missing file, an offline start.
+
+--- 11. PROFILER AND FRAME DEBUGGER (often a live test) ---
+
+Q: How do you fit a 2D camera for different phones?
+A: I choose the orthographic size from the content, so it fits the narrowest phone. Wider screens and tablets simply show more around it. I test the narrowest screen, not only the Game view.
+
+Q: What if the game must support both short and very tall phones?
+A: Safe area and anchors, and I test the extremes: 4:3 and 9:20. Backgrounds go past the safe area, buttons stay inside it.
+
+Q: A screen looked fine in the Editor but is blurry on the phone. Why?
+A: Usually the texture Max Size or compression for that platform, a wrong Canvas Scaler, or a sprite scaled up above its real size. I check the platform settings of the texture first.
+
+Q: Text looks different on the device than in the Editor. What do you check?
+A: The font asset, its fallback fonts, missing letters, and the Canvas Scaler. Fallback fonts can sit at a different height, so I check them with my eyes.
+
+Q: What do you check first when a sprite looks wrong in the game?
+A: I go step by step: source art, import settings (slicing, pivot, PPU, compression), prefab, animation, shader, runtime state, loading. Turning systems off one by one shows which one is guilty.
+
+Q: How do you find where an error comes from in a build?
+A: The Player.log file with stack traces turned on, or logcat on Android and the Xcode console on iOS. The Unity Console shows only the Editor.
+
+--- 12. PREFABS AND VARIANTS FOR LIVE EVENTS ---
+
+Q: What is the difference between a prefab variant and a nested prefab?
+A: A nested prefab is a prefab placed inside another prefab, like a marker inside an item. A variant is a copy of a base prefab that keeps only its differences. I keep the chain short: the base plus one level.
+
+Q: How do you apply or revert prefab overrides safely?
+A: I open the Overrides list first to see exactly what changed. Then I apply only what really belongs to the base and revert my local experiments. I never press "Apply All" from a variant, because it changes every other variant too.
+
+Q: What happens if you rename a child that is animated?
+A: The animation clip finds children by their path name, so it silently loses that child. Nothing shows an error, the object just stops moving. So I rename first and animate after.
+
+Q: When do you use ScriptableObjects?
+A: For shared data and settings: item lists, prices, rewards, tuning numbers. One asset can feed many prefabs. Designers change the values without touching code or scenes.
+
+Q: What happens if you delete a .meta file?
+A: Unity creates a new GUID for the asset, and every link to it breaks. Sprite slices stored in the .meta are lost too. That is why the .meta must always be committed with its asset.
+
+Q: When do you use object pooling?
+A: For things created often: coins, bullets, reward effects, list items. Reusing them avoids lag spikes from creating and destroying objects. Rare screens do not need a pool.
+
+Q: What is the difference between Destroy and SetActive(false)?
+A: SetActive(false) only hides the object; it stays in memory, ready to use again. Destroy removes it completely. Objects that come back often I hide or pool instead of destroying.
+
+--- 13. ART PIPELINE AND TOOLS (asked especially of a Senior) ---
+
+Q: What is the difference between EditMode and PlayMode tests?
+A: EditMode tests run in the Editor without Play, good for tools and data. PlayMode tests run real frames, good for gameplay and UI flow.
+
+Q: Why does a test fail with "Unhandled log message"?
+A: Any Debug.LogError during a test fails it. If the error is expected, I tell the test with LogAssert.Expect.
+
+Q: How do you run Unity tests in CI?
+A: Unity -batchmode -runTests with -testPlatform and -testResults. The results file shows passed and failed tests.
+
+Q: What makes a good test in Unity?
+A: It checks behaviour, not hierarchy names. It does not depend on the open scene, it cleans up after itself, and it fails with a clear message.
+
+Q: What if a test is flaky?
+A: I find the cause: timing, shared state or the open scene. I wait for a condition, not for a longer time.
+
+Q: Why do you write tests for editor tools?
+A: Tools change assets for the whole team. A test proves the tool does the right thing and keeps it working when Unity or the project changes.
+
+Q: How do you make an editor tool safe for artists?
+A: Undo for every change, clear error messages instead of silent defaults, and a preview before applying. It only touches the folders it should.
+
+Q: How do you keep a tool from being abandoned?
+A: It solves a real repeated task and is simple to use, with a short guide. I watch the first artists use it and fix what confuses them.
+
+Q: How do you make an Inspector easier for artists?
+A: Clear field names, sliders ([Range]), tooltips and headers. Fields they should not touch are hidden. For bigger tools, a custom editor window.
+
+Q: When do you write an AssetPostprocessor?
+A: To apply import rules automatically by folder, like compression and Max Size. Then nobody can import a texture with wrong settings by accident.
+
+Q: How do you validate content before a build?
+A: An editor check that finds missing links, wrong import settings and too many materials. It fails with a clear list, so the problem is fixed before release.
+
+Q: Why do files written from outside Unity not appear?
+A: Unity imports files when the window gets focus or on AssetDatabase.Refresh. A script that writes files must call Refresh before using them.
+
+Q: How do you avoid merge conflicts in scenes and prefabs?
+A: Small prefabs instead of one big scene, and clear owners for each part. Scenes are saved as text (Force Text), so Git can merge them, with UnityYAMLMerge as the merge tool.
+
+Q: How do you handle a merge conflict in a scene?
+A: I try UnityYAMLMerge first. If it fails, I take one side and redo the other change in the Editor, then check the scene works.
+
+Q: What goes into .gitignore for Unity?
+A: Library, Temp, Obj, Logs, Build and UserSettings folders, plus IDE files. Assets, Packages and ProjectSettings stay in Git.
+
+Q: Why use Git LFS for art?
+A: Big binary files like PSD and FBX make the Git history huge. LFS stores them outside the normal history.
+
+Q: How do you review a prefab in a pull request?
+A: I open it in Unity, not only the text diff. I check the hierarchy, links, overrides, and that it works in its scene.
+
+Q: What do you do when a teammate's prefab change breaks your screen?
+A: I find the exact change in Git history and talk to the owner. We agree on a fix together; I do not silently overwrite their work.
+
+Q: What is the first thing you check in someone else's prefab?
+A: Missing links, the hierarchy and names, and which components do the real work. Then overrides on instances in scenes that could break.
+
+Q: How do you make the team follow import and naming rules?
+A: I make the rules automatic: import presets per folder and a validator that blocks wrong things with a clear error. A document is needed, but alone it does not work, while a tool works every time.
+
+--- 15. MEMORY AND ASSET BUDGETS ---
+
+Q: Tell me how you would fix memory crashes on weak phones.
+A: A Memory Profiler snapshot on that phone - which textures are biggest and what did not unload. I lower Max Size, set the right compression, add Releases and a validator on texture size, so the problem does not come back.
+
+--- BEHAVIOURAL QUESTIONS (STAR) ---
 
 Q: How do you report a bug so it is easy to fix?
 A: Steps to repeat it, the expected and the actual result, device and build version. Plus a screenshot or video and the log.
@@ -1132,23 +1191,7 @@ A: I compile it, run the tests and look at the result in the Editor. I check eve
 Q: Where does AI help you most as a Technical Artist?
 A: Small editor tools, batch scripts, first drafts of shaders, and explaining code I do not know. It saves time on routine work, but I still own the result.
 
-
-=====================================================================
-QUESTIONS ABOUT MY HOME ASSIGNMENT (they discuss it in the interview)
-=====================================================================
-
-What will happen:
-After the assignment - a review: "why this way", "what else did you consider", "how does it scale to events",
-"how did you check it", "what would you improve", "how would you make it data-driven for designers".
-
-What I did (short):
-- The island from sprites under an orthographic camera; bar and navigation - a Canvas with Canvas Scaler 1080x2400 and Safe Area.
-- The PSD brought in with my PSD to Scene tool.
-- Base BuildableItem_Base with three states + seven direct variants.
-- Animator: Available -> trigger Build -> one BuildSequence clip -> Built. The item pops at 1.1 s
-  (0.85 -> 1.06 -> 1.0), all by ~1.4 s; the next action is available in under 2 s.
-- The cloud - one particle, a 4x4 flipbook, alpha blend. Hammers - sprites with the pivot near the handle.
-- Atlases UI_Core and Island (items together with their shadows). Addressables: Local_Core, Shared_FX, Remote_Island_TeaHouse.
+--- QUESTIONS ABOUT MY HOME ASSIGNMENT (they discuss it in the interview) ---
 
 Q: Why did you structure the variants this way?
 A: One base with the same structure and a shared Animator, and variants change only sprites, anchors and data. A change in the base reaches all seven, and the chain is short, so it is clear where every change comes from.
@@ -1186,15 +1229,7 @@ A: Yes, for drafts of tools, searching the docs and routine checks. I compiled, 
 Q: What was the hardest?
 A: Tuning the build timing to the reference video, so the next action is ready in under 2 seconds.
 
-
-=====================================================================
-HOW I WORK (job post: mockup -> feature, ownership, communication)
-=====================================================================
-
-Short: break down the mockup (states, data, taps) -> ask what is missing -> prototype -> base prefab and Canvas ->
-animation and FX -> connect to game state -> two screens, performance, memory, loading -> variants and Addressables.
-
-More questions:
+--- HOW I WORK (job post: mockup -> feature, ownership, communication) ---
 
 Q: How do you work with artists and developers?
 A: With artists I talk about the goal: how it should look and feel. With developers I talk about how it is built, the limits, speed and how easy it is to fix later. My job is to connect both sides, so the game looks good and still runs well.
