@@ -1,4 +1,4 @@
-import difflib
+﻿import difflib
 import re
 import threading
 import time
@@ -79,7 +79,8 @@ class SuggestionProvider:
         self.enabled = bool(api_key)
         self.last_question = None
         self.last_ts = None
-        self.busy = False
+        self._gen = 0            # покоління питання: +1 на кожне нове питання
+        self._busy_gen = None    # яке покоління зараз в роботі в AI
         self.last_shown_answer = None  # щоб та сама відповідь не перезапускала стрічку
         self._q_changed_at = 0.0
         self._fired_for_q = False
@@ -173,8 +174,9 @@ class SuggestionProvider:
             # на шумних/коротких рядках 0.6 ratio ловило нерелевантні Q
             elif ratio >= 0.6 and len(overlap) >= 3:
                 score = ratio
-            # шлях 3: майже-точний повтор транскрипту (без гейта — інакше
-            # короткі prepared Q ніколи б не стріляли)
+            # шлях 3: майже-точний повтор транскрипту (без гейта). НЕ опускати
+            # нижче 0.8: на "What is X?" питаннях ratio 0.6-0.75 ловить
+            # нерелевантні визначення (GameObject -> ScriptableObject)
             elif ratio >= 0.8:
                 score = ratio
             else:
@@ -210,6 +212,9 @@ class SuggestionProvider:
             # нове питання (нова фраза) — дозволяємо показ заново
             self._last_epoch = phrase_epoch
             self._last_fired_text = None
+            # нове питання: старий AI-запит (якщо висить) — застарілий,
+            # нове покоління дозволяє запустити новий запит не чекаючи старий
+            self._gen += 1
             # діагностика: стан на момент початку нової фрази
             sil = "?"
             if speaker_last_ts is not None:
@@ -240,19 +245,19 @@ class SuggestionProvider:
         if prepared is not None:
             if prepared[1] == self.last_shown_answer:
                 return  # та сама відповідь вже показувалась — не рестартуємо стрічку
-            print(f"[MATCH] fired prepared answer: {prepared[1][:80]}")
+            print(f"[MATCH] fired prepared answer: {prepared[1]}")
             self._set_text(display, prepared[1], restart=True)
             return
 
         if not self.enabled:
             return  # збігу немає, AI вимкнений — нічого не показуємо
 
-        if self.busy:
-            return
-        self.busy = True
+        if self._busy_gen == self._gen:
+            return  # це ж питання вже в роботі
+        self._busy_gen = self._gen
         # НЕ показуємо "generating answer..." — стрічка мовчить, поки
         # відповідь реально не готова (без миготіння)
-        threading.Thread(target=self._fetch, args=(question, display), daemon=True).start()
+        threading.Thread(target=self._fetch, args=(question, display, self._gen), daemon=True).start()
 
     def _call_api(self, messages, max_tokens, timeout_s=25):
         """Жорсткий дедлайн: SDK timeout проксі ігнорує (keep-alive), тому
@@ -282,7 +287,7 @@ class SuggestionProvider:
             raise result["e"]
         return result["r"]
 
-    def _stream_answer(self, messages, display):
+    def _stream_answer(self, messages, display, gen):
         """Стрімінг: відповідь показується у стрічці ПО МІРІ генерації.
         Повертає повний текст або None (якщо стрім не дав контенту)."""
         box = {}
@@ -302,6 +307,9 @@ class SuggestionProvider:
                 last_push = 0.0
                 first_push_done = [False]
                 for chunk in stream:
+                    if gen != self._gen:
+                        # прийшло нове питання — стрім застарів, не показуємо
+                        return
                     now = time.time()
                     if not got_first and now - t0 > 10:
                         # 10с без жодного слова — сервер завис, марно чекати
@@ -333,7 +341,7 @@ class SuggestionProvider:
             return None
         return box.get("a") or None
 
-    def _fetch(self, question, display):
+    def _fetch(self, question, display, gen):
         try:
             # контекст: схожі prepared-відповіді кандидата (уже завантажені
             # при старті — читання файлу не витрачає час під час інтерв'ю)
@@ -360,10 +368,16 @@ class SuggestionProvider:
                 },
             ]
             t0 = time.time()
-            answer = self._stream_answer(messages, display)
+            answer = self._stream_answer(messages, display, gen)
             if not answer:
                 # стрім не дав контенту — повний запит як раніше
-                resp = self._call_api(messages, config.AI_MAX_TOKENS)
+                try:
+                    resp = self._call_api(messages, config.AI_MAX_TOKENS)
+                except TimeoutError:
+                    # сервер нестабільний (upstream timeout) — один ретрай,
+                    # 50с тиші краще ніж нічого
+                    print("[AI] timeout, retrying once...")
+                    resp = self._call_api(messages, config.AI_MAX_TOKENS)
                 msg = resp.choices[0].message
                 answer = (msg.content or "").strip()
                 n_words = len(answer.split())
@@ -386,15 +400,29 @@ class SuggestionProvider:
                     return
             answer = answer.replace("*", "")
             if len(answer.split()) > config.AI_MAX_WORDS + 10:
-                answer = " ".join(answer.split()[:config.AI_MAX_WORDS + 10])
+                # обрізаємо по ОСТАННЬОМУ ЗАВЕРШЕНОМУ реченню, не по слову
+                # (рубання по слову лишає "so it" замість відповіді)
+                out = ""
+                for part in re.split(r"(?<=[.!?]) +", answer):
+                    if len((out + " " + part).split()) > config.AI_MAX_WORDS + 10:
+                        break
+                    out = (out + " " + part).strip()
+                if out:
+                    answer = out
             print(f"[AI] latency {time.time() - t0:.1f}s, words {len(answer.split())}")
             if answer:
-                print(f"[AI] dynamic answer: {answer[:80]}")
+                print(f"[AI] dynamic answer: {answer}")
         except Exception as e:
             print(f"[AI] error: {e!r}")
+            # таймаут не блокує ретрай: питання може вирости — дозволити новий запит
+            if self._busy_gen == gen:
+                self._busy_gen = None
             return
-        finally:
-            self.busy = False
+
+        # поки генерували — прийшло нове питання: відповідь застаріла
+        if gen != self._gen:
+            print("[AI] stale answer dropped (new question arrived)")
+            return
 
         self._set_text(display, answer, restart=True)
 
