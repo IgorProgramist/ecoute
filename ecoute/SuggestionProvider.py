@@ -174,10 +174,18 @@ class SuggestionProvider:
             # на шумних/коротких рядках 0.6 ratio ловило нерелевантні Q
             elif ratio >= 0.6 and len(overlap) >= 3:
                 score = ratio
-            # шлях 3: майже-точний повтор транскрипту (без гейта). НЕ опускати
-            # нижче 0.8: на "What is X?" питаннях ratio 0.6-0.75 ловить
-            # нерелевантні визначення (GameObject -> ScriptableObject)
-            elif ratio >= 0.8:
+            # шлях 3: майже-точний повтор транскрипту. Дворівневий гейт:
+            # ratio>=0.9 + 1 змістовне слово (точні визначення), або
+            # ratio>=0.8 + 2 змістових слова (повтори з шумом). Без гейта
+            # на "What is X?" ratio ~0.8 ловить ШАБЛОН, а не зміст
+            # (texture -> Render Texture)
+            elif ratio >= 0.95:
+                # вербатим-повтор навіть зі стоп/короткими токенами
+                # ("MIP map" -> "mipmap"): запас від FP (max 0.83) великий
+                score = ratio
+            elif ratio >= 0.9 and len(overlap) >= 1:
+                score = ratio
+            elif ratio >= 0.8 and len(overlap) >= 2:
                 score = ratio
             else:
                 score = 0.0

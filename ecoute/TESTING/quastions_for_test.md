@@ -1,6 +1,5 @@
 UNITY FUNDAMENTALS — BASIC DEFINITIONS
 Unity Core
-- What is Unity?
 - What is a GameObject?
 - What is a Component?
 - What is a Transform?
