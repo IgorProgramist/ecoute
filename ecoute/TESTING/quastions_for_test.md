@@ -1,0 +1,133 @@
+UNITY FUNDAMENTALS — BASIC DEFINITIONS
+Unity Core
+- What is Unity?
+- What is a GameObject?
+- What is a Component?
+- What is a Transform?
+- What is a RectTransform?
+- What is a Scene?
+- What is a Prefab?
+- What is a Prefab Variant?
+- What is a MonoBehaviour?
+- What is a ScriptableObject?
+2D / Sprites
+- What is a Texture?
+- What is a Sprite?
+- What is a SpriteRenderer?
+- What is a Sprite Atlas?
+- What is a Sprite Mask?
+- What is a Sorting Layer?
+- What is Order in Layer?
+- What is a Sorting Group?
+- What is a Pivot?
+- What are Pixels Per Unit?
+- What is 9-slicing?
+- What is a spritesheet?
+- What is a Tight Mesh?
+- What is Full Rect?
+UI / uGUI
+- What is a Canvas?
+- What is Canvas Scaler?
+- What is a Graphic Raycaster?
+- What is an EventSystem?
+- What is a CanvasGroup?
+- What is an Image?
+- What is a Button?
+- What is a TextMeshProUGUI?
+- What is a ScrollRect?
+- What is a Mask?
+- What is a RectMask2D?
+- What is a Layout Group?
+- What is a Content Size Fitter?
+- What are Anchors?
+- What is a Safe Area?
+Animation
+- What is an Animator?
+- What is an Animator Controller?
+- What is an Animation Clip?
+- What is an Animator State?
+- What is an Animator Transition?
+- What is an Animator Parameter?
+- What is an Animation Event?
+- What is a Blend Tree?
+- What is Tweening?
+Rendering / Materials
+- What is a Material?
+- What is a Shader?
+- What is Shader Graph?
+- What is URP?
+- What is the Built-in Render Pipeline?
+- What is the 2D Renderer?
+- What is a Renderer?
+- What is a MeshRenderer?
+- What is a SkinnedMeshRenderer?
+- What is a Render Texture?
+Particles / VFX
+- What is a Particle System?
+- What is VFX Graph?
+- What is Overdraw?
+- What is Fill Rate?
+- What is Transparency?
+- What is Alpha Clipping?
+Performance
+- What is a Draw Call?
+- What is Batching?
+- What is Static Batching?
+- What is Dynamic Batching?
+- What is the SRP Batcher?
+- What is GPU Instancing?
+- What is CPU-bound?
+- What is GPU-bound?
+- What is Frame Time?
+- What is FPS?
+- What is GC.Alloc?
+- What is the Unity Profiler?
+- What is the Frame Debugger?
+Textures / Memory
+- What is Texture Compression?
+- What is a Mipmap?
+- What is Max Texture Size?
+- What is Read/Write Enabled?
+- What is a Texture Format?
+- What is ASTC?
+- What is ETC2?
+Addressables / Asset Management
+- What are Addressables?
+- What is an Addressables Group?
+- What is an Addressables Catalog?
+- What is an Addressables Label?
+- What is an Addressable Asset?
+- What is an AssetBundle?
+- What is Resources?
+- What is Object Pooling?
+Build / Platform
+- What is a Unity Build?
+- What is a Development Build?
+- What is IL2CPP?
+- What is Mono?
+- What is a Build Profile?
+DIFFERENCE QUESTIONS
+І тільки після цього — такі прості порівняння, як у твоєму файлі:
+- What is the difference between a GameObject and a Component?
+- What is the difference between Transform and RectTransform?
+- What is the difference between a Prefab and a Prefab Variant?
+- What is the difference between a Texture and a Sprite?
+- What is the difference between a Sprite and a SpriteRenderer?
+- What is the difference between a SpriteRenderer and a UI Image?
+- What is the difference between a Material and a Shader?
+- What is the difference between an Animation Clip and an Animator Controller?
+- What is the difference between Animator and Tweening?
+- What is the difference between Mask and RectMask2D?
+- What is the difference between Full Rect and Tight Mesh?
+- What is the difference between Sorting Layer and Order in Layer?
+- What is the difference between MeshRenderer and SkinnedMeshRenderer?
+- What is the difference between Particle System and VFX Graph?
+- What is the difference between Transparency and Alpha Clipping?
+- What is the difference between Static Batching and Dynamic Batching?
+- What is the difference between Batching and SRP Batcher?
+- What is the difference between CPU-bound and GPU-bound?
+- What is the difference between Addressables and Resources?
+- What is the difference between Addressables and AssetBundles?
+- What is the difference between local and remote Addressables?
+- What is the difference between Mono and IL2CPP?
+- What is the difference between Screen Space Overlay, Screen Space Camera and World Space Canvas?

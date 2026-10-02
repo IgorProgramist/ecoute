@@ -4,5 +4,7 @@ openai
 customtkinter
 PyAudioWPatch
 keyboard
-nvidia-cublas-cu12
-nvidia-cudnn-cu12
+standard-aifc
+audioop-lts
+setuptools
+av==16.1.0

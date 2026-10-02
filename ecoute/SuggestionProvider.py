@@ -13,6 +13,16 @@ BASE_URL = "https://opencode.ai/zen/go/v1"
 QUESTION_SILENCE_S = 3.0    # аудіо-тиша 3с = питання завершене (дихання/задуми посеред питання коротші) (порог <2с стріляє в "сліпій зоні", доки записується наступний шматок)
 REFIRE_MIN_NEW_WORDS = 4   # повторний показ тільки якщо питання виросло на 4+ слів
 
+# загальні слова, що не мають матчингової ваги — інакше overlap роздувається
+# generic-словами і нерелевантні Q фолспозитивять ("salary" -> "mobile games")
+_STOPWORDS = {
+    "what", "when", "which", "would", "could", "should", "will", "your",
+    "about", "that", "this", "these", "those", "there", "have", "has", "had",
+    "does", "did", "was", "were", "been", "then", "than", "some", "many",
+    "much", "most", "very", "also", "just", "into", "over", "every",
+    "other", "each", "them", "they", "from",
+}
+
 SYSTEM_PROMPT_TEMPLATE = (
     "You are helping a candidate during a live technical job interview (Unity / Technical Artist role). "
     "You receive the interviewer's latest spoken question, plus the candidate's background info "
@@ -148,12 +158,30 @@ class SuggestionProvider:
 
     def _best_prepared(self, question):
         qn = _normalize(question)
-        best_ratio, best = 0.0, None
+        qcontent = set(w for w in qn.split() if len(w) >= 4 and w not in _STOPWORDS)
+        best_score, best = 0.0, None
         for qorig, aorig, qnorm in self.prepared_norm:
             ratio = difflib.SequenceMatcher(None, qn, qnorm).ratio()
-            if ratio > best_ratio:
-                best_ratio, best = ratio, (qorig, aorig)
-        if best_ratio >= config.MATCH_THRESHOLD:
+            # шлях 1: token-coverage по змістових словах (len>=4, без стоп-слів)
+            # — стійкий до префіксів "Can you tell me about your experience with..."
+            qw_content = set(w for w in qnorm.split() if len(w) >= 4 and w not in _STOPWORDS)
+            overlap = qcontent & qw_content
+            coverage = len(overlap) / len(qw_content) if qw_content else 0.0
+            if len(overlap) >= 3 and coverage >= config.MATCH_THRESHOLD:
+                score = coverage
+            # шлях 2: ratio тільки для впевнених збігів + ЗМІСТОВИЙ гейт:
+            # на шумних/коротких рядках 0.6 ratio ловило нерелевантні Q
+            elif ratio >= 0.6 and len(overlap) >= 3:
+                score = ratio
+            # шлях 3: майже-точний повтор транскрипту (без гейта — інакше
+            # короткі prepared Q ніколи б не стріляли)
+            elif ratio >= 0.8:
+                score = ratio
+            else:
+                score = 0.0
+            if score > best_score:
+                best_score, best = score, (qorig, aorig)
+        if best_score >= config.MATCH_THRESHOLD:
             return best
         return None
 

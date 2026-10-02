@@ -13,7 +13,7 @@ TRANSCRIBE_LANGUAGE = "en"
 # "tiny.en" = швидка, тільки англ
 # "base"    = EN+UK (швидко)
 # "small"   = точніша (EN+UK); на GPU працює швидко
-WHISPER_MODEL = "medium"
+WHISPER_MODEL = "small"
 BEAM_SIZE = 1  # 1 = швидше (~0.6с проти 1.35с при 5), якість майже та сама
 
 # --- ТЕЛЕСУФЛЕР (безкінечна стрічка) ---
