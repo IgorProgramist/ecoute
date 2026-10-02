@@ -1,3 +1,12 @@
+ABOUT ME (facts about me, use them in answers):
+- Unity Technical Artist with 7+ years in game development (since 2014), mostly mobile slot games for international studios.
+- Strongest areas: UI implementation (uGUI, TextMeshPro), animation integration (Animator, tweens, Spine), atlas assembly, and performance optimization on weak phones.
+- I work as the bridge between artists and developers: I integrate art so it looks right and runs fast.
+- Before Unity I was a Flash/AS3 game developer - that gives me a solid programming foundation.
+- I am comfortable on live projects: large content volume, frequent updates, release support.
+- Past companies: Pur-Pur Games, Skywind Group, Sigma Software, GamePoint, Mad Brain Games, VOLMI, Custom Game Studio (Warsaw).
+- Portfolio: slot game preview, GameChatUnity (Unity UI chat system), BotBusters (3D game), Player_Spine_to_Unity, Word Farm Adventure, Adventure 3Dgame.
+
 UNITY KNOWLEDGE (facts, in simple words):
 
 WHAT MATTERS MOST IN A SENIOR TA INTERVIEW:
@@ -22,7 +31,7 @@ PERFORMANCE ON MOBILE (asked most often):
 - GPU: overdraw (transparent on transparent), heavy shaders, big screen size, post-processing.
 - Change ONE thing and measure again. Give numbers: "14.2 ms -> 10.8 ms".
 - Overdraw - one pixel drawn many times (background + panels + particles). Phones are limited by fill rate (pixels per second), so big transparent layers cost a lot. See it: Scene view -> Overdraw.
-- Garbage (GC.Alloc) - memory the code creates in a frame. Later the garbage collector cleans it, and that can cause a frame-time spike, more so when there is a lot of it. Goal - zero allocations per frame in code that runs every frame.
+- Garbage - memory the code creates in a frame. Later the garbage collector cleans it, and that can cause a frame-time spike, more so when there is a lot of it. Code that runs every frame should avoid creating garbage.
 - Average FPS hides hitches. Look at the worst frames (frame time graph).
 - Test long sessions: after 10-30 minutes the phone heats up and the frame rate drops.
 
@@ -30,7 +39,7 @@ SHADERS (Shader Graph, math, cost on mobile):
 - What it is: A shader is a small program on the graphics card that calculates the colour of every pixel.
 - Material = shader + values (texture, colour, speed).
 - Vertex shader - runs once per vertex (triangle corner): positions, UV, vertex colour.
-- Fragment (pixel) shader - runs once per pixel: the final colour. There are many more pixels than vertices, so heavy math in the fragment shader = expensive.
+- Fragment (pixel) shader - runs roughly once per drawn pixel: the final colour. There are many more pixels than vertices, so heavy math in the fragment shader = expensive.
 - Shader Graph - shaders from nodes, no code. For 2D: Sprite Unlit / Sprite Lit.
 - Why a TA cares: A shader can give motion and effects (wind, glow, shine, water, dissolve, scrolling) much cheaper than animating every object. But it is not free - I still check the fragment cost, texture samples and overdraw.
 - One shared material on many objects gives them a chance to batch. But draw order, textures, keywords and masks can still split it, so I check the Frame Debugger.
@@ -45,7 +54,7 @@ SHADERS (Shader Graph, math, cost on mobile):
 - Shader variants: each keyword combination creates a separate shader variant. More variants make builds slower and more complex, and can make the build bigger. Different variants can also split SRP Batcher batches, so I keep the number of variants as low as I can. shader_feature removes unused variants, multi_compile does not.
 - Magenta object = the shader does not work (missing, broken, Built-in in URP). Cyan can mean the shader is still compiling in the Editor.
 - Many sprites, one material, different motion: global time + a per-object phase in the vertex colour.
-- MaterialPropertyBlock in URP usually takes that renderer out of the SRP Batcher - I check it in the Frame Debugger.
+- A per-object property override in URP can take that renderer out of the SRP Batcher - I check it in the Frame Debugger.
 
 RENDER PIPELINE: BUILT-IN, URP, HDRP:
 - What it is: The pipeline is Unity's "drawing engine": how the camera draws a frame, how light is calculated, which shaders work.
@@ -73,12 +82,12 @@ DRAW CALLS AND BATCHING:
 - Atlas (Sprite Atlas) - one big texture with many sprites, so they CAN share one texture and batch. It does not cut draw calls by itself: draw order, materials, shaders and masks can still split the batches.
 - Why: A phone processor is weak.
 - I set a draw-call budget for each project from typical weak phones, and check it with the Profiler and Frame Debugger - there is no one number for everyone.
-- When to use what (4 kinds of batching): SRP Batcher (on by default in URP) - does NOT cut the number of draw calls, but makes each one cheaper to set up. Works for objects with the same shader variant, even with different materials. For world SpriteRenderers in URP I check if they work with the SRP Batcher; for uGUI I think about Canvas batching and rebuilds instead.
+- When to use what (4 kinds of batching): SRP Batcher - does NOT cut the number of draw calls, but makes each one cheaper to set up. Works for objects with the same shader variant, even with different materials. For 2D sprites I mainly think about Sprite Atlases, shared materials and draw order; for uGUI I think about Canvas batching and rebuilds instead.
 - Static batching - joins meshes that never move at build time. It can cut draw-call cost but uses more memory. For uGUI I look at Canvas batching and rebuilds; I don't just assume static batching is the answer without checking the real setup.
 - Dynamic batching - joins some small meshes every frame. Unity today usually doesn't recommend it, especially when the SRP Batcher already does the work, so I don't count on it without profiling.
-- GPU Instancing - draws many copies of the same mesh and material with fewer draw calls (grass, trees).
+- GPU Instancing - can render many copies of the same mesh and material in one instanced draw call (grass, trees).
 - uGUI has its own batching inside a Canvas: elements with the same material and texture, drawn next to each other, can batch together.
-- What breaks a batch: a sprite from another atlas between two sprites from the same atlas; different materials; masks; MaterialPropertyBlock in URP; different shader keywords.
+- What breaks a batch: a sprite from another atlas between two sprites from the same atlas; different materials; masks; per-object property overrides in URP; different shader keywords.
 - SRP Batcher and dynamic batching: in URP the SRP Batcher and GPU Instancing usually come before Dynamic Batching. I don't count on Dynamic Batching and I measure the real scene.
 - Many copies of the same mesh can use GPU Instancing. For other compatible objects, the SRP Batcher can make draw calls cheaper for the CPU.
 - If fewer batches don't make the frame faster, batching probably wasn't the main problem - I profile CPU and GPU time to find what really slows the frame.
@@ -86,16 +95,15 @@ DRAW CALLS AND BATCHING:
 TEXTURES AND COMPRESSION:
 - What it is: Every picture has import settings: Max Size, compression, mipmaps, Read/Write, PPU.
 - Why: In a 2D game textures often take a big part of memory and build size. But audio, video, fonts and other assets can be big too, so I check the Build Report.
-- A 2048×2048 texture uncompressed ~16 MB, with ASTC ~1-4 MB.
-- When to use what: ASTC - the usual choice for modern iOS and Android, with a good balance of quality and size. For example I might start with 4x4 for sharp UI and small text, 6x6 for items, 8x8 for soft shadows and gradients, then check the quality on the target phones. Bigger block = less memory, worse quality.
-- ETC2 - fallback format for old Android without ASTC.
+- A 2048×2048 texture uncompressed is about 16 MB; compressed it is several times smaller.
+- When to use what: the compressed format that modern phones support well gives a good balance of quality and size. I keep higher quality for sharp UI and small text, and stronger compression for soft shadows and gradients, then check the quality on the target phones. Stronger compression = less memory, worse quality.
 - Max Size - I pick it from how big the asset really is on screen and how good it must look, not from the original PSD size.
 - Mipmaps - usually off for UI and 2D shown at a fixed size (the mip chain adds about a third more memory); world sprites that zoom far out may still need them. Read/Write - off (it keeps a copy in memory).
 - Sprites in an atlas: the atlas platform and texture settings decide the final packed texture. So I don't count on the source sprites' compression, and I check the final atlas.
 - A thin line or halo at a sprite edge - atlas padding and Alpha Is Transparency.
 - Find duplicates by content (hash), not by name: in my test 13 files were 6 unique pictures.
 - Check pixels, not only logic: wrong filtering + compression blurred 59 of 90 UI sprites, while every test was green.
-- In my test the atlases: 2048, ASTC 6x6, no mipmaps, no rotation, no tight packing, padding 4.
+- In my test the atlases: 2048, compressed, no mipmaps, no rotation, no tight packing, padding 4.
 
 PARTICLES AND VFX:
 - What it is: Particle System (Shuriken) is Unity's main built-in particle system, and the usual starting point for a typical mobile 2D project. VFX Graph is made for particles simulated on the GPU, but how well it works in URP on mobile depends on the Unity and package version and on the phone.
@@ -104,8 +112,8 @@ PARTICLES AND VFX:
 - Why: Effects give "juice", but they are the easiest way to kill the frame rate through overdraw.
 - When to use what: Mobile 2D - Particle System. VFX Graph - only if the Unity version, the renderer and the phones support what it needs.
 - Alpha blend - smoke and clouds that must cover the background. Additive - light, fire, sparks (only brightens, disappears on a light background).
-- CPU or GPU: in the Profiler ParticleSystem.Update = processor (fewer particles, simpler modules); if the graphics card is the limit - it is overdraw (smaller particles, fewer layers, a smaller texture).
-- Cheap: a few small systems, one shared unlit material, low Max Particles, and no unnecessary lights or collisions. Use Culling Mode = Pause for effects that are not visible.
+- CPU or GPU: if the Profiler shows particle simulation is heavy, it is the processor (fewer particles, simpler modules); if the graphics card is the limit, I check overdraw, shader cost, texture size and blending (smaller particles, fewer layers, a smaller texture).
+- Cheap: a few small systems, one shared unlit material, low Max Particles, and no unnecessary lights or collisions. Use a culling mode that pauses off-screen effects when they don't need to keep simulating.
 - I measure the effect on the weakest phone together with the rest of the screen. The real limit comes from the effect and the target device.
 - One-shot effects: Looping off, one Burst. Simulation Space depends on the effect: Local if it should follow its emitter (a sparkle on an item), World if it should stay where it was born (smoke, trails).
 - Props that must read clearly (hammers) - animated sprites, not particles.
@@ -117,8 +125,8 @@ UI (Canvas, uGUI, TextMeshPro):
 - TextMeshPro - text from an SDF atlas. It stays sharp at most sizes (very small or very large sizes can still show artifacts).
 - Why: UI can take a big part of CPU time in a casual mobile game, especially when big Canvases, layouts or often-changing elements trigger rebuilds.
 - The main trap - Canvas rebuilds: when a UI element changes, Unity can mark parts of the UI as changed (dirty) and redo the geometry, layout or batches on that Canvas. On a big Canvas with many elements this can get expensive.
-- A ticking timer on a big Canvas keeps causing that rebuild work - I check it with the Canvas.SendWillRenderCanvases marker in the Profiler.
-- The cure: static UI and often-changing UI on separate Canvases.
+- A ticking timer on a big Canvas keeps causing that rebuild work - I check the UI rebuild time in the Profiler.
+- A common fix: static UI and often-changing UI on separate Canvases, so one change doesn't rebuild a large unrelated Canvas.
 - What can split UI batches: different materials or textures, draw order, and Masks that use the stencil (Mask adds extra drawing work; RectMask2D is usually cheaper for a simple rectangle clip).
 - When a layout changes (children added, removed or resized), Layout Group and Content Size Fitter calculate again; layouts inside layouts multiply the cost. For static layouts - anchors. For long lists - reuse the item views.
 - The Graphic Raycaster checks every Graphic that has Raycast Target on, so I turn it off on decoration to cut extra raycast work.
@@ -136,7 +144,7 @@ UI (Canvas, uGUI, TextMeshPro):
 - Pivot at the bottom for everything that stands on the ground.
 - Sort by Y without a script: Renderer 2D Data -> Transparency Sort Mode = Custom Axis (0, 1, 0), Sprite Sort Point = Pivot. Lower on screen = in front.
 - Mesh Type Tight - less transparent area (less overdraw), but a complex outline = many vertices.
-- Custom Sorting Layers live in ProjectSettings/TagManager.asset and do not travel with the Assets folder. So in the test I used one layer + Order in Layer ranges (sky -3100, island -2000, items -71..628, FX 1000, markers 2000, UI 3000).
+- Custom Sorting Layers live in the Project Settings and do not travel with the Assets folder. So in the test I used one layer + Order in Layer ranges (sky -3100, island -2000, items -71..628, FX 1000, markers 2000, UI 3000).
 - A PSD with 200 layers: agree which layers move separately, merge the rest.
 
 ANIMATION (Animator, tweens, 2D skeletons):
@@ -165,9 +173,9 @@ ADDRESSABLES AND REMOTE CONTENT:
 - Local = first screen, UI, fonts, shaders, first island - the game must work without internet.
 - Remote: later islands, events, seasonal art.
 - For shared assets like atlases or materials, I run Analyze to find duplicates between bundles. If something is duplicated, I fix the grouping or give it its own group.
-- For content updates: I keep addressables_content_state.bin from the release. "Update a Previous Build" creates an update that minimizes what players download. With the right restrictions and packing, unchanged bundles stay the same, and only changed content gets new bundles. "Check for Content Update Restrictions" moves changes out of static groups.
+- For content updates: I keep the content state file from the release. "Update a Previous Build" creates an update that minimizes what players download. With the right restrictions and packing, unchanged bundles stay the same, and only changed content gets new bundles. "Check for Content Update Restrictions" moves changes out of static groups.
 - Mark groups "Cannot Change Post Release" to move changed assets into a new update group. Or "Can Change Post Release" so a changed asset rebuilds its bundle - the download cost depends on packing.
-- I own each AsyncOperationHandle and release it when I don't need the content anymore (InstantiateAsync -> ReleaseInstance). I unload event content when the event ends.
+- I keep the handle of each load and release it when I don't need the content anymore. I unload event content when the event ends.
 - Analyze - finds duplicates between groups.
 - Watch out for: everything in Default Local Group, anything in Resources folder, remote groups with no remote paths, blocking loads, and forgetting to Release.
 - My groups in the test: Local_Core, Shared_FX, Remote_Island_TeaHouse.
@@ -177,9 +185,8 @@ PROFILER AND FRAME DEBUGGER (often a live test):
 - Frame Debugger steps through every draw call and shows the render state. I compare them to see why batching stopped.
 - Memory Profiler - memory snapshots, comparing "before" and "after".
 - In interviews, they show a Profiler screenshot and ask where the bottleneck is.
-- I compare Main Thread and Render Thread timing against the frame budget. Then I find the biggest marker: Canvas.SendWillRenderCanvases is a clue of UI update and rebuild work (I drill into the detailed UI markers for the cause), ParticleSystem.Update is particles, GC.Alloc is garbage collection.
-- Gfx.WaitForPresentOnGfxThread might mean the GPU is waiting, but it could be VSync too. I check Gfx.PresentFrame, render-thread work, and VSync before I say the GPU is the bottleneck.
-- If I see Gfx.WaitForCommands on the Render Thread, the thread is ready for commands - it might mean the Main Thread is slow. I check the Main Thread before I decide.
+- I compare Main Thread and Render Thread timing against the frame budget. Then I find what takes the most time - UI rebuilds, particles, scripts or garbage collection - and look deeper into that part.
+- When the CPU waits for the GPU, it might mean the GPU is slow, but it could be VSync too. I check the render work and VSync before I say the GPU is the bottleneck.
 - The Editor is good for trying things, but its timings are not the same as on a phone - the Editor does extra work of its own, and a PC is faster. For final decisions I test a development build on real phones.
 - I sort by Self time to find which function is actually slow.
 - I take two Memory Profiler snapshots before and after to see what grew. Growth is not always a leak - it could be caching or lazy loading. I look for unexpected memory and follow the references to see why it's still there.
@@ -216,30 +223,30 @@ ART PIPELINE AND TOOLS (asked especially of a Senior):
 MEMORY AND ASSET BUDGETS:
 - Build size is what players download. Memory is what's loaded right now. Loading is how long it takes. They're linked but separate.
 - A budget - a limit per screen or device tier: MB of textures, draw calls, particles, ms per frame.
-- Why: If I go over memory on a weak phone, the game crashes (OOM).
+- Why: If memory gets too high on a weak phone, the app can run out of memory or be killed by the system.
 - A senior is asked "how do you set budgets".
 - I don't use one number for all textures. I define budgets per device tier and test on real phones.
 - Draw calls: I set the budget from the weakest target device. For frame time, I might aim lower than 33.3/16.6 ms to leave room for spikes and heat throttling. The exact number depends on the project and device.
 - Memory grows when a screen opens. Maybe something didn't unload - Addressables without Release, objects, subscriptions. Or it's a cache or lazy loading. I snapshot and follow the references before I call it a leak.
-- Destroy removes the object, but the asset can stay loaded if something else still references it. With Addressables I release the handle, and Unity can unload the bundle once nothing needs it. Resources.UnloadUnusedAssets is a separate step and heavy on the CPU.
+- Destroy removes the object, but the asset can stay loaded if something else still references it. With Addressables I release the handle, and Unity can unload the bundle once nothing needs it. Unloading unused assets is a separate step and heavy on the CPU.
 - If the build is too big, I check the Build Report and start with the biggest things. Assets in Resources always ship, so that's not where optional content goes.
 
 QUALITY TIERS AND DEVICES:
 - I split thousands of different phones into tiers: low, mid, high.
 - Each tier has its own settings.
 - I pick a tier from a device list and rules. RAM is one input - these are just examples, my thresholds depend on the project. GPU, CPU, OS features, and QA data all matter.
-- On first launch the game reads SystemInfo and picks a tier.
+- On first launch the game reads the device info and picks a tier.
 - I also use data from live players and QA tests.
 - Each tier changes texture size (HD or SD), particle count, post-processing (low is off), a lower render scale on low if profiling shows GPU or fill-rate pressure, and frame rate (low is 30 fps, high is 60).
-- In Unity, I use Quality Settings for tiers, a separate URP asset per tier, Addressables variants for HD and SD, and a startup script that calls QualitySettings.SetQualityLevel.
+- In Unity, I use Quality Settings for tiers, a separate URP asset per tier, Addressables variants for HD and SD, and a startup script that sets the quality level.
 - I test the weakest phones first because memory, heat, and driver issues show up there. If it's stable on the weakest one, that's a safer baseline. But I still test the other tiers because GPUs, drivers, and OS versions are different.
 
 BUILD AND PLAYER SETTINGS:
-- IL2CPP converts code to C++ and then to native machine code ahead of time. It's commonly used for mobile builds (iOS needs it). It changes runtime and build behaviour, but I don't assume it makes every piece of code faster; the build takes longer and the binary might be bigger.
+- For mobile, the C# code is usually built into native machine code ahead of time (iOS needs it). It changes runtime and build behaviour, but I don't assume it makes every piece of code faster; the build takes longer and the app might be bigger.
 - Stripping removes unused code and engine modules so the build is smaller.
-- Player Settings for mobile: I pick texture compression like ASTC with ETC2 fallback, graphics APIs like Vulkan, Metal, or GLES depending on devices, ARM64 according to the platform and store requirements, and AAB for Google Play.
-- That's why it matters: most build size issues and "it works in the editor but not on the phone" come from these settings.
-- Stripping can break reflection calls. If it does, I use link.xml or [Preserve] to keep the code.
+- Player Settings for mobile: I pick the right texture compression for the target phones, graphics APIs like Vulkan, Metal, or GLES depending on devices, ARM64 according to the platform and store requirements, and the package format Google Play needs.
+- That's why it matters: these settings can strongly affect build size and how the game behaves on the device, but I measure the actual problem first instead of assuming the cause.
+- Stripping can break code that is called only by name. If it does, I mark that code so it is kept.
 - Shader variants: I check Graphics settings and the Editor log for the count. I turn off URP features that create too many variants. A missing variant can turn objects pink in the build even if the editor looks fine.
 - When I upgrade Unity on a live project, I do it as a separate step and read the changes in URP, Addressables, 2D, and Shader Graph. I build and test on key phones. Shaders, URP assets, atlases, and Addressables are the usual trouble spots, so I compare against a build of the old version.
 
@@ -303,7 +310,7 @@ COMPONENT: CAMERA:
 - Near / Far Clip - the depth range the camera draws. In a 2D setup I mainly make sure objects stay inside that range.
 - Depth - the draw order between cameras in the old pipeline. In URP camera stacking (Base/Overlay) does this instead.
 - Rendering Path - uses the pipeline setting by default. I don't change it per camera.
-- HDR / MSAA / Dynamic Resolution - the camera allows them, but the URP asset decides if they really run. Dynamic Resolution lowers the render size when the game is slow; a simple 2D scene usually doesn't need it.
+- HDR / MSAA / Dynamic Resolution - the camera allows them, but the URP asset decides if they really run. Dynamic Resolution can lower the render size to reduce GPU load when the project enables and controls it; a simple 2D scene usually doesn't need it.
 - Occlusion Culling - skips objects hidden behind other objects. It needs baked occlusion data; in 2D there usually is none, so it does nothing.
 - Target Texture - empty means the camera draws to the screen. A Render Texture is for minimaps or UI previews.
 - Physical Camera fields (Iso, Aperture, Focal Length...) - only for a real-camera look in 3D; not used for an orthographic 2D camera.
@@ -313,7 +320,7 @@ COMPONENT: UNIVERSAL ADDITIONAL CAMERA DATA (the URP part of the camera):
 - Renderer - which renderer from the URP asset this camera uses; by default the first one (for us the 2D Renderer).
 - Post Processing - turns Volume effects (Bloom, color grading) on for this camera. Effects can add extra passes and bandwidth cost, so on phones I keep it off unless the art needs it.
 - Anti-aliasing - smooths jagged edges with a full-screen pass (FXAA/SMAA). Sprites already have soft edges, so I usually don't need it.
-- Render Shadows / Depth Texture / Opaque Texture - extra 3D shadow and screen copies. They cost memory and time; I turn them on only if an effect uses them.
+- Render Shadows / Depth Texture / Opaque Texture - 3D shadows and extra rendering data: depth values or a copy of the opaque colour. They cost memory and bandwidth, so I turn them on only if an effect uses them.
 - Stop NaN / Dithering - fixes for broken HDR pixels and for color banding. I turn Dithering on only if a gradient shows bands on the phone.
 - Volume Mask / Volume Trigger - which Volumes affect this camera. Only matters when post-processing is on.
 
@@ -321,7 +328,7 @@ COMPONENT: AUDIO LISTENER:
 - The "ears" of the scene. Normally I keep one active AudioListener in the scene; several active listeners can cause a warning. It has no settings; I keep it on the main camera.
 
 COMPONENT: CANVAS:
-- Render Mode - Screen Space - Overlay draws UI on top of everything. Screen Space - Camera draws UI through a camera, so it can sort together with sprites and particles. World Space puts UI in the game world, like a sign on a building.
+- Render Mode - Screen Space - Overlay renders UI directly in screen space without a camera. Screen Space - Camera draws UI through a camera, so it can sort together with sprites and particles. World Space puts UI in the game world, like a sign on a building.
 - Render Camera - the camera used by a Screen Space - Camera Canvas. I set it explicitly for Camera mode.
 - Plane Distance - where a Screen Space - Camera Canvas is placed in front of its render camera.
 - Sorting Layer / Order in Layer - where the whole Canvas draws compared to sprites. Low for a background, high for the HUD. This works against sprites and particles only for Screen Space - Camera or World Space; a Screen Space - Overlay Canvas is drawn on top of the whole scene.
@@ -467,7 +474,7 @@ COMPONENT: MESH FILTER (not in my scene, here so the set is complete):
 COMPONENT: MESH RENDERER (not in my scene, here so the set is complete):
 - Draws the MeshFilter's mesh with its Materials list (one material per sub-mesh).
 - Shadows, Light Probes, Reflection Probes, Lightmap - 3D lighting options; for flat 2D-style meshes I turn shadows off.
-- Sorting Layer / Order in Layer exist on every Renderer (sortingLayerID, sortingOrder), so a mesh can sort together with sprites.
+- Sorting Layer / Order in Layer exist on every Renderer, so a mesh can sort together with sprites.
 
 COMPONENT: SKINNED MESH RENDERER (3D characters with bones):
 - Mesh / Root Bone - the mesh that bends with bones, and the bone its bounds follow.
@@ -486,7 +493,7 @@ COMPONENT: AUDIO SOURCE:
 - Doppler, Spread, Reverb, Bypass Effects - 3D and effect settings; not used for 2D sound.
 
 COMPONENT: PARTICLE SYSTEM - MAIN MODULE:
-- Duration - the length of one cycle. For looping effects it is the time base for curves; for one-shots it is how long the system lives.
+- Duration - the length of the emission cycle. For looping effects it repeats; for one-shots emission stops after the duration, but particles already born can live longer.
 - Looping - repeats forever (ambience) or plays once (one-shot effects that can go back to a pool).
 - Prewarm - a looping effect starts as if it already ran one cycle, so it looks full from the first frame.
 - Start Delay - wait before emitting; good to stagger parts of one effect without code.
@@ -499,10 +506,10 @@ COMPONENT: PARTICLE SYSTEM - MAIN MODULE:
 - Simulation Space - Local: particles move with the object (a sparkle on a moving item). World: particles stay where they were born (smoke, trails).
 - Simulation Speed - speeds up or slows down the whole effect without touching every curve.
 - Scaling Mode - Hierarchy uses the parent's scale too, so a scaled prefab scales its effect.
-- Play On Awake - starts when the object turns on. For pooled one-shots I still call Play() myself.
+- Play On Awake - starts when the object turns on. For pooled one-shots I still start it myself.
 - Max Particles - a hard limit; no more particles are made. A cheap safety net for weak phones.
 - Auto Random Seed - a different pattern every play. Off with a fixed seed makes it repeat the same way, good for tests.
-- Stop Action - what happens when the system finishes: Disable, Destroy, or Callback (calls OnParticleSystemStopped so my pool code can take it back).
+- Stop Action - what happens when the system finishes: Disable, Destroy, or Callback (tells my pool code it finished, so it can take it back).
 - Culling Mode - controls what happens when the system is outside the camera view. For effects that don't need to keep simulating, I can use Pause; for effects whose state should catch up when visible again, I use Pause And Catch-up.
 - Ring Buffer Mode - keeps old particles alive until Max Particles is reached, then replaces the oldest; for footprints or marks.
 - Emitter Velocity Mode - how the emitter's own speed is measured (Transform or Rigidbody); only matters when the emitter moves.
@@ -555,29 +562,29 @@ ASSETS: ADDRESSABLES SETTINGS:
 - Catalog Download Timeout - how long to wait for the catalog. On mobile I set one, so a bad network quickly shows a retry screen.
 
 ASSETS: ADDRESSABLES GROUPS:
-- In my assignment, a local group - content the game always needs: the UI atlas, shared effect materials and textures, shared shaders. It loads from the app, uses LZ4 and is Cannot Change Post Release - it ships with the app and doesn't change after release.
-- In my assignment, one remote group per island - the island prefab, its item data and its atlas. It loads from the server, uses LZMA and is Can Change Post Release - each island downloads only when needed and can be updated on its own. Can Change / Cannot Change is a content-update strategy choice, not one right setting.
+- In my assignment, a local group - content the game always needs: the UI atlas, shared effect materials and textures, shared shaders. It loads from the app, uses fast-loading compression and is Cannot Change Post Release - it ships with the app and doesn't change after release.
+- In my assignment, one remote group per island - the island prefab, its item data and its atlas. It loads from the server, uses stronger compression for smaller downloads and is Can Change Post Release - each island downloads only when needed and can be updated on its own. Can Change / Cannot Change is a content-update strategy choice, not one right setting.
 - Bundle Mode - Pack Together: one bundle per group. Pack Separately: one bundle per entry - it can reduce how much content is directly affected when one entry changes, but there are more bundles and more dependency and network overhead. Pack Together By Label: bundles by shared label sets.
-- Compression - LZ4 loads fast with little CPU. LZMA can make downloads smaller, and Unity turns it into LZ4 in the cache on the phone. I pick by what matters more: download size or loading speed.
+- Compression - the fast option loads quickly with little CPU; the strong option makes downloads smaller, and Unity converts it to the fast one in the cache on the phone. I pick by what matters more: download size or loading speed.
 - Include In Build - the group is part of the Addressables build (for remote groups that means built for the server, not put inside the app).
 - Use Asset Bundle Cache - keeps downloaded bundles on the phone, so the next launch doesn't download again.
 - Use Asset Bundle CRC - adds an integrity check when bundles load. It costs some CPU, so I use it where the extra check is worth it, like downloads.
-- Bundle Naming - Append Hash changes the file name when the content changes, so the CDN never gives an old bundle.
+- Bundle Naming - Append Hash changes the file name when the content changes, which helps avoid old bundles coming from the CDN or cache.
 - Internal Asset Naming - how assets are named inside bundles. I keep the project's chosen naming mode and don't change it casually, because it affects the content build.
 - Retry Count / Timeout - how many times to retry a failed download and how long to wait. I choose them by network conditions and how important the content is, so a short drop can recover without leaving the player waiting too long.
 - Labels - tags on entries, so code can load a whole set at once, like every item of one island.
 
 ASSETS: SPRITE ATLASES (Sprite Atlas V2):
 - One atlas for the UI that is on screen together, so the HUD batches; one atlas per island, with items and their shadows together, living in that island's remote group.
-- Include in Build - whether the atlas is part of the build. If it is off, I need another delivery path, such as Addressables or late binding through SpriteAtlasManager.atlasRequested.
-- Allow Rotation / Tight Packing - Allow Rotation can turn sprites inside the atlas; I usually keep it off for UI, where predictable orientation and easy debugging matter more than a little atlas space. Tight Packing uses the sprite outline to save atlas space; whether the sprite uses a tight mesh is a separate setting. I turn them on only when the assets and setup support it.
+- Include in Build - whether the atlas is part of the build. If it is off, I need another delivery path, such as Addressables or late binding.
+- Allow Rotation / Tight Packing - Allow Rotation can turn sprites inside the atlas to pack them better; I may keep it off for UI if a predictable atlas layout makes debugging or tools easier. Tight Packing uses the sprite outline to save atlas space; whether the sprite uses a tight mesh is a separate setting. I turn them on only when the assets and setup support it.
 - Padding - empty pixels between sprites, so filtering and compression don't bleed neighbours into each other.
 - Alpha Dilation - fills empty padding with edge colors to hide bleeding; useful for soft edges with mipmaps.
 - Read/Write - keeps an extra copy of the texture for the CPU. Off unless code reads pixels.
 - Generate Mip Maps - smaller copies for far zoom; they add about a third more memory. Off for UI and fixed-size 2D.
 - sRGB - on for color textures in a Linear project.
 - Filter Mode - Bilinear is smooth; Point is for pixel art; Trilinear only makes sense with mipmaps.
-- Platform override (Max Size, Format) - the atlas settings decide the final texture memory, not the source sprites. ASTC block size trades quality for memory (for example 4x4 for sharp UI text, 6x6 for items, 8x8 for soft shadows - then I check on the phone).
+- Platform override (Max Size, Format) - the atlas settings decide the final texture memory, not the source sprites. Stronger compression trades quality for memory (higher quality for sharp UI text, stronger compression for soft shadows - then I check on the phone).
 
 ASSETS: TEXTURE IMPORT (sprites):
 - Texture Type - Sprite for 2D and UI; Default for 3D textures.
@@ -589,21 +596,21 @@ ASSETS: TEXTURE IMPORT (sprites):
 - Wrap Mode - Clamp stops edge pixels from repeating at the borders (sprites); Repeat is for tiling textures.
 - Filter Mode - Bilinear for smooth art, Point for pixel art.
 - Max Size - the largest size the texture is imported at. I match it to the size on screen; it is often one of the biggest ways to save texture memory.
-- Compression / platform format - ASTC with a block size per art type: soft art can take bigger blocks. Sprites packed in an atlas get the atlas format instead.
-- Non-Power-of-2 - None for sprites (ASTC works with any size); To Nearest for 3D textures that need it.
+- Compression / platform format - the compression strength per art type: soft art can take stronger compression. Sprites packed in an atlas get the atlas format instead.
+- Non-Power-of-2 - None keeps the original size, which is usual for sprites; scaling to a power of 2 only when the target format or platform needs it.
 
 ASSETS: MATERIALS AND SHADERS:
 - Particles/Unlit - transparent, no lighting, cheap. Additive blend for light and sparks, Alpha blend for smoke and confetti.
 - Sprite-Lit-Default - sprites react to 2D lighting. Sprite-Unlit-Default fits when sprites don't need 2D lighting, and I check the actual cost on the target setup.
 - Custom Shader Graph sprite shaders (shine, water, wind, glow, lava, twinkle) - give items life without moving transforms. I share materials where possible, and I make sure the shader stays compatible with the SRP Batcher.
-- A custom UI shader (like a liquid fill orb) - driven by a material property; it splits the UI batch only for that one element.
+- A custom UI shader (like a liquid fill orb) - driven by a material property; it can split the UI batch around that element.
 - TextMeshPro/Mobile/Distance Field - a TMP shader intended for mobile, with fewer features than the full shader; I use the features the project actually needs; outline and shadow presets are separate materials.
 - URP Lit for 3D characters - full PBR lighting; Simple Lit or Unlit is cheaper on phones for small characters.
 - Enable GPU Instancing (on a material) - helps many copies of one mesh. For sprites I count on the SRP Batcher and normal sprite batching instead.
 
 ASSETS: ANIMATOR CONTROLLERS AND CLIPS:
-- A simple chain without parameters (Fall -> Breath) - the first state moves to the next by Exit Time; the idle loops. The order of clips is the logic.
-- An item state machine (Available -> BuildSequence -> Built) with Trigger parameters. Transitions from a trigger have Has Exit Time off, so they start at once; Fixed Duration with 0 s blend, because sprite poses must not blend.
+- A simple chain without parameters (Fall -> Breath) - the Fall state moves to Breath through a transition with Exit Time; Breath loops. The transition is the logic, not the order of the clips.
+- An item state machine (Available -> BuildSequence -> Built) with Trigger parameters. For trigger transitions that should react at once, I turn Has Exit Time off; Fixed Duration with 0 s blend, because sprite poses must not blend.
 - Popups and cards (Show, Hide) - code plays the state by name.
 - Write Defaults - with it on, a state writes default values for things it doesn't animate. I keep it the same inside one controller, because mixing makes values snap back.
 - Character controllers - Float parameters drive a blend between idle and walk directions.
@@ -613,12 +620,12 @@ ASSETS: ANIMATOR CONTROLLERS AND CLIPS:
 
 PROJECT SETTINGS: URP ASSET:
 - Renderer List - which renderers the pipeline can use; the 2D Renderer is the one that really draws a 2D game.
-- Depth Texture / Opaque Texture - extra screen copies each frame, for soft particles or see-through effects. Off saves bandwidth; I turn one on only for an effect that needs it.
+- Depth Texture / Opaque Texture - extra rendering data each frame: depth values or a copy of the opaque colour. Depth is used for effects like soft particles; the opaque copy is used for effects that read the scene colour behind them. Both cost memory and bandwidth, so I turn one on only for an effect that needs it.
 - HDR - lets colors go above 1 (for bloom). It can add bandwidth and memory cost, so I keep it off when the project doesn't need HDR-dependent effects.
 - MSAA - smooths edges but costs memory and bandwidth. For a 2D sprite-heavy project I only enable it if the visual result actually benefits, because it adds rendering cost.
 - Render Scale - draws the game at a lower resolution and scales it up. A lower value can reduce fill-rate cost on GPU-bound phones, but the image gets softer, so I choose it from profiling and visual testing rather than a fixed number.
 - Main Light / Additional Lights / Shadows / Cascades / Cookies / Reflection Probes - 3D lighting settings. The 2D Renderer ignores most of them.
-- SRP Batcher - makes setting up each draw call cheaper on the CPU for compatible shaders. On.
+- SRP Batcher - makes setting up each draw call cheaper on the CPU for compatible shaders.
 - Dynamic Batching - joins some small meshes every frame. It's a separate mechanism from the SRP Batcher. I don't enable it just because it sounds faster: I check what the SRP Batcher and GPU Instancing already cover, then measure if Dynamic Batching helps this scene.
 - Color Grading Mode / LUT Size - only used with post-processing.
 - Volume Update Mode - Every Frame checks Volumes all the time; Via Scripting saves CPU if they never change.
@@ -638,7 +645,7 @@ PROJECT SETTINGS: 2D RENDERER DATA:
 PROJECT SETTINGS: QUALITY:
 - Levels - each level is one set of quality settings; the game can pick one per device.
 - Render Pipeline Asset - each level can use its own URP asset, so different quality tiers can use different URP setups, for example a lighter configuration on weaker phones.
-- VSync Count - waits for the screen refresh. On mobile the final frame rate is affected by Application.targetFrameRate, the platform and the device's display and OS behaviour.
+- VSync Count - waits for the screen refresh. On mobile the final frame rate is affected by the target frame rate the game sets, the platform and the device's display and OS behaviour.
 - Anti Aliasing - in URP, MSAA comes from the URP asset, not from here.
 - Global Mipmap Limit - lowers the resolution of every texture that has mipmaps; a quick memory lever for weak phones.
 - Anisotropic Textures - helps textures seen at an angle; wasted in 2D.
@@ -651,11 +658,11 @@ PROJECT SETTINGS: QUALITY:
 
 PROJECT SETTINGS: PLAYER:
 - Color Space - Linear gives correct light and blending math; supported on modern phones.
-- Scripting Backend - IL2CPP builds C++ ahead of time (AOT) and is common for mobile; iOS needs AOT-compatible code. The cost is longer builds.
+- Scripting Backend - how Unity builds and runs the C# code on the device. iOS needs the code built into native code ahead of time, while Android can use either option depending on the project. The native option means longer builds.
 - Target Architectures - for current Android releases I target ARM64, according to the platform and store requirements; ARMv7 only for very old phones.
 - Minimum / Target API Level - the oldest Android the game supports, and the version it targets.
 - Graphics APIs - Vulkan and OpenGLES3 on Android, Metal on iOS. I choose the order from the phones I support and test real devices.
-- Managed Stripping Level - removes unused code to make the build smaller; higher levels can remove code called by reflection, unless I keep it with link.xml.
+- Managed Stripping Level - removes unused code to make the build smaller; higher levels can remove code that is called only by name, unless I mark it to be kept.
 - Default Orientation - for a portrait-only game I lock Portrait, so the layout never meets landscape.
 - Multithreaded Rendering - lets rendering work use a separate thread. I keep it matched to the renderer and check it on target devices, not just because it sounds faster.
 - Api Compatibility Level - I use the level that the project and its packages support. I don't choose it only because it is smaller.
@@ -665,17 +672,17 @@ PROJECT SETTINGS: PLAYER:
 PROJECT SETTINGS: GRAPHICS:
 - Default Render Pipeline - the URP asset; if it is empty, the project uses the old Built-in pipeline.
 - Always Included Shaders - shaders that are always in the build; each adds variants, so the list stays short.
-- Preloaded Shaders / Shader Variant Collection - warms up heavy shaders during loading, so the first use doesn't freeze the game.
+- Preloaded Shaders / Shader Variant Collection - prewarms selected shader variants during loading, which can reduce the hitch when a shader is used for the first time.
 - Instancing / Lightmap / Fog Stripping - removes shader variants for features no scene uses.
 - Sprites Default Material - only for Built-in; URP uses the 2D Renderer's material.
 - Transparency Sort Mode here - ignored in URP; the 2D Renderer Data setting is used.
 
 PROJECT SETTINGS: EDITOR:
-- Sprite Packer Mode - Sprite Atlas V2 keeps atlas packing working in Play Mode and builds. I don't disable it in a project that relies on Sprite Atlases.
+- Sprite Packer Mode - Sprite Atlas V2 can pack atlases for Play Mode and builds, depending on the selected V2 mode. I don't disable it in a project that relies on Sprite Atlases.
 - Asset Serialization - Force Text saves scenes and prefabs as readable text instead of binary, so changes can be compared.
 - Enter Play Mode Options - can skip the domain reload so Play starts faster; then static fields keep their values, so code must reset them itself.
 - Async Shader Compilation - in supported Editor configurations, the Editor shows a cyan placeholder while a shader compiles, instead of freezing.
-- Asset Pipeline / Cache Server - a shared cache server makes imports faster for a team.
+- Asset Pipeline / Unity Accelerator - a shared import cache can make asset imports faster for a team.
 
 
 QUESTIONS AND ANSWERS:
@@ -683,194 +690,260 @@ QUESTIONS AND ANSWERS:
 --- FUNDAMENTALS: BASIC DEFINITIONS AND DIFFERENCES ---
 
 Q: What is Unity?
-A: Unity is a game engine and editor: I build scenes from GameObjects and components, import art, set up UI, animation and effects, and build the game for phones, PC or consoles. It gives me the editor tools, the rendering pipeline, physics, animation and a C# scripting layer. For a mobile 2D game like a Playtika title, I mostly work with sprites, uGUI, Animator, Particle System, URP and Addressables.
-
-Q: What is a Scene?
-A: A Scene is one saved set of GameObjects - a level, a menu or a screen - stored as a .unity file. The game loads scenes to show different parts of the game, and it can load several at once (additive loading). I keep scenes light and put reusable things into prefabs, so the scene mostly just places and connects them.
+A: Unity is a game engine and editor for building games for phones, PC, consoles and other platforms. Scenes are built from GameObjects and components, and art, UI, animation, effects and C# code all come together in the editor. For a mobile 2D game the main parts are sprites, uGUI, the Animator, the Particle System, URP and Addressables.
 
 Q: What is a GameObject, and how is it different from a Component?
-A: A GameObject is an empty container in the scene - it has a name, a Transform and can have children. Components are what give it behaviour or looks: a SpriteRenderer draws a sprite, an Animator plays animation, a script runs logic. So the GameObject is the thing, and the components decide what that thing does. For example, an island item is one GameObject with a SpriteRenderer, an Animator and my item script.
+A: A GameObject is the basic object in a Unity scene that acts as a container for components - it always has a Transform. Components give it its data, look or behaviour: a SpriteRenderer draws a sprite, an Animator plays animation, a script runs logic. So the GameObject is the object itself, and the components define what it does.
 
 Q: What is a MonoBehaviour?
-A: MonoBehaviour is the base class for Unity scripts that live on GameObjects. When my script inherits from it, I can add it as a component, and Unity calls its methods like Awake, Start, Update and OnDestroy at the right time. It also lets the script show fields in the Inspector. Data that doesn't need to live on an object usually goes into a ScriptableObject instead.
+A: MonoBehaviour is the base class for scripts that live on GameObjects as components. Unity calls its methods at the right moments - when the object starts, every frame and when it is destroyed - and its public or serialized fields show up in the Inspector. It is the usual way to add logic to an object, while data that doesn't need to live on an object usually goes into a ScriptableObject.
 
 Q: What is a Transform, and how is it different from a RectTransform?
-A: A Transform holds position, rotation and scale, and the parent-child link. Every GameObject has one. A RectTransform is the UI version: it adds a rectangle with anchors, pivot and size, so UI can stretch and stick to the edges of its parent. I use Transform for world objects like sprites and particles, and RectTransform for everything on a Canvas.
+A: A Transform holds the position, rotation and scale of a GameObject, and the parent-child link in the hierarchy - every GameObject has one. A RectTransform extends Transform with UI rectangle data - anchors, a pivot and a size - so UI can stretch and stick to the edges of its parent. Transform is used for world objects like sprites and particles, and RectTransform is mainly used by uGUI elements under a Canvas.
 
-Q: How do anchors work in a RectTransform?
-A: Anchors say where on the parent the element is attached. If both anchors are on the same spot, the element has a fixed size. If I pull them apart, the size follows the distance between the anchors, and Size Delta adds an offset to it. So first I set anchors (stretch or fixed), then the pivot for rotation, then the position.
+Q: What is a Scene?
+A: A Scene is a saved asset, stored as a .unity file, that contains GameObjects and their scene data - for example the main menu, the game island or an event screen. Scenes can be loaded one at a time or additively, on top of each other. Reusable things usually live in prefabs, so the scene mostly places and connects them.
 
 Q: What is a Prefab?
-A: A Prefab is a saved GameObject with all its children and components, stored as an asset that I can place many times. When I change the prefab, every copy in every scene gets the change, unless that copy overrides it. I use prefabs for anything reused - items, popups, effects - so a fix happens in one place.
+A: A Prefab is a GameObject with all its children and components saved as an asset, so it can be placed many times. When the prefab changes, every copy in every scene gets the change, unless that copy overrides it. It is used for anything reused - items, popups, effects - so a fix happens in one place.
 
 Q: What is a Prefab Variant, and how is it different from a Prefab?
-A: A Prefab Variant is a prefab based on another prefab. It keeps a link to its base and stores only its differences, like a different sprite or colour. A normal prefab stands alone; a variant inherits everything from the base, so a fix to the base reaches all variants unless they override that part. In my assignment, seven items were variants of one base item.
+A: A Prefab Variant is a prefab based on another prefab. It keeps a link to its base and stores only its differences, like a different sprite, colour or size. A normal prefab stands alone; a variant inherits everything from the base, so a fix to the base reaches all variants unless they override that part. It is used for many similar objects that share one structure, like seven items built from one base item.
 
 Q: What is the difference between a prefab variant and a nested prefab?
-A: A nested prefab is a prefab inside another prefab, like a marker inside an item. A variant is a copy of a base prefab that keeps only its differences. I keep the chain short: the base plus one level.
+A: A nested prefab is a prefab inside another prefab, like a marker inside an item. A variant is a prefab based on another prefab that keeps the link to its base and overrides only its differences. So a nested prefab is about composition - building one prefab from others - and a variant is about inheritance from a base prefab.
 FOLLOW-UP: How do you handle overrides on variants? -> First I open the Overrides list to see exactly what changed. Then I apply only what really belongs to the base and revert my own experiments. I don't just press Apply All, because applying an override to the base can change the other variants that come from it.
 
 Q: What is a ScriptableObject?
-A: A ScriptableObject is a data asset - a file in the project that holds values, not a GameObject in the scene. Many objects can point to the same one, so the data lives in one place and isn't copied into every prefab. I use it for things like item prices, rewards or settings that a designer can change without opening a prefab.
+A: A ScriptableObject is a data asset - a file in the project that holds values, not a GameObject in the scene. Many objects can point to the same one, so the data lives in one place and isn't copied into every prefab. It is used for things like item prices, rewards, balance numbers or settings that a designer can change without opening a prefab.
 
 Q: What is object pooling?
-A: Object pooling means I create objects once, then turn them off and reuse them instead of destroying and creating them again. Creating and destroying often costs CPU time and can create garbage, which causes spikes. I use it for things that appear many times, like reward icons, particle bursts or list items.
-
-Q: What is a Canvas?
-A: A Canvas is the root of all uGUI. Every UI element must be under one, and the Canvas collects its children into meshes and draws them. When something on it changes, the Canvas has to rebuild that part, so for big screens I keep parts that change often apart from the static parts.
-
-Q: What is the difference between Screen Space - Overlay, Screen Space - Camera and World Space Canvas?
-A: Screen Space - Overlay draws the UI on top of everything, with no camera - the usual choice for a HUD. Screen Space - Camera draws the UI through a camera at a set distance, so it can sort together with sprites and particles. World Space puts the Canvas into the scene as an object, like a health bar over a character. I pick by whether the UI must mix with the world or just sit on top.
-
-Q: What is the Canvas Scaler?
-A: The Canvas Scaler decides how UI scales on different screen sizes. With Scale With Screen Size I design for one reference resolution, and Unity scales the UI up or down for each phone. The Match value says whether it follows the width, the height or a mix. Then I test on narrow and wide phones.
-
-Q: What is a Safe Area and why does mobile UI need it?
-A: The Safe Area is the part of the screen where UI is not covered by a notch, camera cutout, rounded corners or the home indicator. Unity gives it as Screen.safeArea. I put buttons and bars inside a Safe Area root that follows it, while backgrounds can still go edge to edge. Without it, a button can end up under the notch on some phones.
-
-Q: What is 9-slicing and when do you use it?
-A: 9-slicing splits a sprite into nine parts with borders: the corners stay the same size, the edges stretch in one direction, and the centre stretches in both. I set the borders in the Sprite Editor and use Image Type Sliced. I use it for panels, buttons and frames that change size, so the rounded corners don't get stretched.
-
-Q: What is an EventSystem?
-A: The EventSystem is the object that sends input - taps, clicks, drags - to the UI. Without it, buttons don't react at all. Its input module decides which input system it reads; with the new Input System that is the InputSystemUIInputModule. I normally keep one active EventSystem per scene.
-
-Q: What is a Graphic Raycaster?
-A: A Graphic Raycaster sits on a Canvas and finds which UI element is under a tap. It checks the Graphics on that Canvas that have Raycast Target on. That's why I turn Raycast Target off on decoration, and remove the Raycaster from Canvases that never take input.
-
-Q: What is a CanvasGroup?
-A: A CanvasGroup controls a whole group of UI elements at once: alpha, whether they react to taps, and whether they block raycasts. It's the easy way to fade a whole popup or turn off its input in one place. In the assignment I mostly faded with Image and TMP alpha, and a CanvasGroup is the alternative when a whole panel has to fade together.
-
-Q: What is a Renderer?
-A: A Renderer is the component that actually draws an object - it holds the material and decides if and where the object is drawn. SpriteRenderer draws sprites, MeshRenderer draws a mesh, SkinnedMeshRenderer draws a mesh bent by bones, and ParticleSystemRenderer draws particles. They share common settings like materials, sorting and whether they are enabled.
-
-Q: What is the difference between a MeshRenderer and a SkinnedMeshRenderer?
-A: A MeshRenderer draws a normal mesh that doesn't bend, like a rock or a building. A SkinnedMeshRenderer deforms a mesh with bones, so it's used for animated characters. Skinned meshes need extra deformation work every frame and aren't candidates for static or dynamic batching in the same way as regular MeshRenderers, so on mobile I keep the bone count, the bone weights per vertex and the number of skinned objects reasonable.
-
-Q: What is the difference between a SpriteRenderer and a UI Image?
-A: A SpriteRenderer draws a sprite in the world - it sorts with Sorting Layer and Order in Layer and moves with the camera. A UI Image draws a sprite on a Canvas - it uses RectTransform, anchors and the Canvas draw order. I use SpriteRenderer for world art like the island, and Image for screen UI like buttons and bars.
-
-Q: Mask or RectMask2D?
-A: For a rectangle clip I use RectMask2D - it doesn't use the stencil buffer and is usually cheaper than Mask. Mask can cut any shape, but it uses the stencil buffer and adds extra drawing work, so I use it only when I really need a custom shape. The limit of RectMask2D is that it only works with rectangular clipping in the Canvas 2D plane; it cannot make an arbitrary-shaped mask.
+A: Object pooling means objects are created once, then turned off and reused instead of being destroyed and created again. Creating and destroying often costs CPU time and can create garbage, which causes frame spikes. It is used for things that appear many times, like reward icons, particle bursts or list items.
 
 Q: What is a Texture, and how is it different from a Sprite?
-A: A Texture is image data - basically the pixels that Unity imports and prepares for rendering. A Sprite is a piece of a texture with extra 2D information: its rectangle, pivot, borders and outline. One texture can hold many sprites, like a sprite sheet or an atlas. I import art as a texture with Texture Type set to Sprite, and then the sprites from it are what renderers use.
+A: A Texture is image data - the pixels that Unity imports and prepares for rendering, with settings like compression and Max Size. A Sprite is a 2D piece of a texture with extra information: its rectangle, pivot, borders and outline. One texture can hold many sprites, like a sprite sheet or an atlas, and renderers draw the sprites, not the texture directly.
 
 Q: What is a Sprite, and how is it different from a SpriteRenderer?
-A: A Sprite is the asset - the picture and its pivot and borders. A SpriteRenderer is the component that draws a sprite in the scene, with colour, flip, material and sorting. So many SpriteRenderers can show the same Sprite, and one SpriteRenderer can swap sprites at runtime.
+A: A Sprite is the asset - the picture with its pivot and borders, made by setting Texture Type to Sprite. A SpriteRenderer is the component that draws a sprite in the scene, with colour, flip, material and sorting. Many SpriteRenderers can show the same Sprite, and one SpriteRenderer can swap sprites at runtime.
 
-Q: Why set Mesh Type to Tight, and when is it worse?
-A: Tight makes the mesh follow the sprite shape, so less empty transparent area gets drawn. But a very complex outline makes many vertices. For small or simple sprites, the extra vertices may not be worth it, so Full Rect can be the simpler choice.
+Q: What is a Sprite Atlas?
+A: A Sprite Atlas is an asset that packs many sprites into one bigger texture. Sprites from the same atlas share a texture, so when they are drawn one after another with the same material, they have a chance to batch. It is mainly used to group the sprites of one screen or feature together, which helps rendering and keeps loading organized.
 
-Q: What is a Sprite Atlas for?
-A: It packs many sprites into one texture, so they have a chance to share the same texture and material and batch together. It does not cut draw calls by itself - draw order, materials and masks can still split batches. I group sprites that are on the same screen.
-
-Q: What is texture compression?
-A: Texture compression stores pixels in a GPU format that takes much less memory and stays compressed on the GPU, like ASTC or ETC2. Uncompressed RGBA uses 4 bytes per pixel; ASTC can be several times smaller. The trade-off is quality: bigger blocks save more memory but can show artefacts. I pick the format and block size per platform and check the result on a real phone.
-
-Q: What is a mipmap?
-A: A mipmap is a chain of smaller copies of a texture - half size, quarter size and so on. The GPU uses an appropriate smaller copy when the object is far away or small on screen, which reduces aliasing and unnecessary texture sampling. The chain costs about a third more texture memory, so for UI and 2D shown at a fixed size I usually turn mipmaps off.
+Q: What is a Sprite Mask?
+A: A Sprite Mask is a component that shows or hides parts of sprites in the world. SpriteRenderers choose with their Mask Interaction setting whether they appear only inside or only outside the mask. It is used for reveal effects, cutouts or windows in 2D scenes; for UI the Mask and RectMask2D components are used instead.
 
 Q: What is a Sorting Layer and Order in Layer?
-A: A Sorting Layer is a named group in a set order - for example Background, World, Effects - and everything in a higher layer draws on top. Order in Layer is a number inside one layer: a higher number draws on top. For 2D rendering, they help control the relative order of supported renderers, like sprites and particles, and Camera-mode Canvases.
+A: A Sorting Layer is a named group in a set order, for example Background, World and Effects, and a higher layer draws on top of a lower one. Order in Layer is a number inside one layer: a higher number draws on top, but it only matters between objects in the same layer. Together they control the draw order of 2D renderers like sprites and particles, and of Camera-mode Canvases.
 
 Q: What is a Sorting Group?
-A: A Sorting Group makes an object built from many sprites sort as one unit. Without it, the parts of two characters can mix - the head of one in front of the body of the other. With a Sorting Group on each root, each character sorts as a whole, and its parts sort among themselves inside it.
+A: A Sorting Group makes an object built from many sprites sort as one unit. Without it, the parts of two characters can mix - the head of one can draw in front of the body of the other. With a Sorting Group on each root, each object sorts as a whole against others, and its parts keep their order inside it.
 
-Q: What is URP?
-A: URP is the Universal Render Pipeline - Unity's scriptable render pipeline made for a wide range of devices, including phones. It's set up through a URP Asset and a Renderer, works with Shader Graph and the SRP Batcher, and has a 2D Renderer for sprite games. For a new mobile game it is the pipeline I would normally pick.
+Q: What is a pivot?
+A: A pivot is the point a sprite or UI element is positioned, rotated and scaled around. For sprites it is set in the Sprite Editor, and it can also be used as the sort point for Y-sorting. For standing objects it usually goes at the bottom, so they sort and stand on the ground correctly.
 
-Q: What is the 2D Renderer?
-A: The 2D Renderer is a URP renderer made for 2D games. It's set in the URP Asset instead of the Universal Renderer, and it handles sprite sorting and 2D-specific features. It also holds the 2D sorting settings, like Transparency Sort Mode and Custom Axis.
+Q: What is Pixels Per Unit?
+A: Pixels Per Unit (PPU) says how many pixels of a sprite make one Unity unit in the world. With 100 PPU, a 100-pixel sprite is one unit wide. Keeping the same PPU across one art set keeps sizes consistent between sprites.
 
-Q: What is a draw call and a batch?
-A: A draw call is the CPU asking the GPU to draw something. Batching is a group of techniques Unity uses to cut that overhead. Some of them really join objects into fewer draw calls, like the 2D sprite batching when sprites share a texture and material. Others, like the SRP Batcher, keep the same number of draw calls but make each one cheaper. That's why atlases and shared materials matter.
+Q: What is 9-slicing?
+A: 9-slicing splits a sprite into nine parts with borders: the corners keep their size, the edges stretch in one direction, and the centre stretches in both. The borders are set in the Sprite Editor, and the sprite is used with Image Type Sliced or SpriteRenderer Draw Mode Sliced. It is used for panels, buttons and frames that change size without stretching their rounded corners.
 
-Q: What is the SRP Batcher?
-A: In URP it makes draw calls much cheaper for objects that use the same shader variant, even with different materials - if the shader keeps its material values in the UnityPerMaterial buffer. It does not join them into one call. Each draw call stays, but it becomes much cheaper for the CPU to set up.
+Q: What is a sprite sheet?
+A: A sprite sheet is one texture that holds many sprites, often frames of an animation laid out in a grid. It is imported with Sprite Mode Multiple and cut into separate sprites in the Sprite Editor. The frames can then be used in animation clips, and keeping them in one texture avoids switching between many small textures.
 
-Q: What is overdraw and how do you reduce it?
-A: Drawing the same pixel many times because of transparent layers. I use tight meshes, fewer full-screen transparent images and smaller particles. In URP I see the hot spots with the Rendering Debugger's overdraw view (the Scene View Overdraw mode is for Built-in). The Frame Debugger is a separate tool - I use it to look at each draw call.
+Q: What is the difference between Full Rect and Tight mesh?
+A: Full Rect draws a sprite as a simple rectangle with four vertices, including its transparent areas. Tight builds a mesh closer to the visible shape, which can reduce the transparent pixels drawn, but it adds vertices. Tight can help big sprites with lots of empty space, while Full Rect can be the better choice for small, simple or 9-sliced sprites.
 
-Q: What is fill rate and why does it matter on mobile?
-A: Fill rate is roughly how many pixels the GPU can process in a given amount of time. On phones big transparent layers and particles use a lot of it, because the same screen pixels are processed many times. If I lower the Render Scale and the frame time improves a lot, that's a useful clue that pixel processing is part of the bottleneck.
+Q: What is a Canvas?
+A: A Canvas is the root of uGUI - every UI element like an Image, Button or text must be under one. Unity builds the UI geometry and rendering data from the Graphics under the Canvas. A UI change can trigger rebuild work for the affected geometry, layout or batches, so on big screens the parts that change often are kept apart from the static parts.
 
-Q: What is the difference between CPU-bound and GPU-bound?
-A: CPU-bound means the processor is the slow part - scripts, UI rebuilds, animation, physics, or preparing draw calls. GPU-bound means the graphics chip is the slow part - too many pixels, overdraw, heavy shaders or big textures. I find out in the Profiler by comparing CPU and GPU frame time, because each needs a different fix.
+Q: What is the difference between Screen Space - Overlay, Screen Space - Camera and World Space Canvas?
+A: Screen Space - Overlay renders the UI directly in screen space over the scene, without a camera - the usual choice for a HUD and menus. Screen Space - Camera renders the Canvas through a chosen camera at a set distance, so it can take part in camera-based sorting with the world. World Space puts the Canvas into the scene as an object, like a health bar above a character or a sign in the world.
 
-Q: What is frame time and how is it related to FPS?
-A: Frame time is how long one frame takes, in milliseconds. FPS is how many frames fit into one second, so 60 FPS means about 16.6 ms per frame and 30 FPS about 33.3 ms. I prefer to talk in frame time, because it adds up: if UI takes 4 ms and particles 3 ms, I can see exactly what eats the budget. I also look at the worst frames, not just the average, because spikes are what players feel.
+Q: What is the Canvas Scaler?
+A: The Canvas Scaler decides how UI scales on different screen sizes. With Scale With Screen Size the UI is designed for one reference resolution, and Unity scales it up or down for each device. The Match value says whether it follows the width, the height or a mix, which matters a lot for phones and tablets with different shapes.
 
-Q: What is GC.Alloc and why care?
-A: Memory that the code creates in this frame. Later the garbage collector has to clean it up. If the code keeps creating garbage, the collector has more work, and that can make frames slower. I try to keep allocations at zero in hot code that runs every frame - a small allocation once on a button press is usually not a problem. I use Call Stacks in the Profiler to find where it comes from.
+Q: What are anchors?
+A: Anchors say where on the parent a UI element is attached, as values from 0 to 1 of the parent's rectangle. If both anchors are on the same point, the element keeps a fixed size; if they are pulled apart, the size follows the distance between them, and Size Delta adds an offset. Anchors are what let UI stick to edges and stretch correctly on different screen shapes.
 
-Q: What is a Render Texture?
-A: A Render Texture is a texture that a camera draws into at runtime, instead of drawing to the screen. I can then show it somewhere else - for example a 3D character inside a UI frame, or a minimap. It costs memory and an extra camera render, so I keep its size small and only render it when it's needed.
+Q: What is a Safe Area and why does mobile UI need it?
+A: The Safe Area is the part of the screen that is not covered by a notch, camera cutout, rounded corners or the home indicator. Unity gives this area to the game. Buttons and bars are placed inside a Safe Area root that follows it, while backgrounds can still go edge to edge, so nothing important hides under the notch.
 
-Q: What is a Material, and how is it different from a Shader?
-A: A Shader is the program that runs on the GPU and decides how pixels are drawn. A Material is an asset that uses one shader and stores its values - colours, textures, numbers. So one shader can have many materials with different settings. Objects with the same material can batch more easily, so I share materials where I can.
+Q: What is a Graphic Raycaster?
+A: A Graphic Raycaster sits on a Canvas and finds which UI element is under a tap or click. It raycasts against the Graphics on that Canvas that have Raycast Target on, and works together with the EventSystem. Turning Raycast Target off on decoration, and removing the Raycaster from Canvases that never take input, saves work.
 
-Q: What is Shader Graph?
-A: Shader Graph is Unity's visual tool for making shaders by connecting nodes instead of writing code. It works with URP and HDRP. Compatible shaders can also work with the SRP Batcher, depending on how the graph is built. It's usually my first choice for effects like dissolve, UV scroll or a shine, and I write HLSL only when the graph can't do something.
+Q: What is an EventSystem?
+A: An EventSystem coordinates UI input and events - taps, clicks, drags, selection and navigation. Its input module, for example InputSystemUIInputModule, feeds the input into it. A typical uGUI setup has one active EventSystem handling the UI input.
+
+Q: What is a CanvasGroup?
+A: A CanvasGroup controls a whole group of UI elements at once: their alpha, whether they react to taps, and whether they block raycasts. It is the easy way to fade a whole popup or turn off its input in one place. Each element can also be faded on its own through its Image or text colour alpha.
+
+Q: What is an Image?
+A: An Image is the basic UI component that shows a sprite or a plain colour inside a RectTransform. It is used for backgrounds, icons, frames and progress bars. Its Image Type can be Simple, Sliced, Tiled or Filled - for example Filled for a progress bar or a timer circle.
+
+Q: What is a Button?
+A: A Button is a UI component that reacts to taps and calls its onClick event. It has visual states - Normal, Highlighted, Pressed, Selected and Disabled - shown with a colour tint, a sprite swap or an animation. It usually has a Graphic as its target, often an Image, and the Graphic Raycaster detects the tap on it.
+
+Q: What is TextMeshProUGUI?
+A: TextMeshProUGUI is the TextMesh Pro text component for UI. It uses signed distance field fonts, so text keeps good quality when it is resized, and it supports rich text, outlines, shadows and sprites inside text. It is the standard choice for UI text in Unity.
+
+Q: What is a ScrollRect?
+A: A ScrollRect is a component that makes content scroll inside a smaller visible area, horizontally or vertically. It usually works with a viewport that uses a Mask or RectMask2D to clip the content, and it can have scrollbars and inertia. It is used for shop lists, inventories, settings and any list longer than the screen.
+
+Q: What is a Layout Group?
+A: A Layout Group arranges its child UI elements automatically - Horizontal, Vertical or Grid. It handles position, spacing and, if set, the size of the children, so a list or a row of buttons updates by itself when items are added. It recalculates when the layout changes, so for UI that never changes, fixed anchors can be cheaper.
+
+Q: What is a Content Size Fitter?
+A: A Content Size Fitter resizes its own RectTransform to fit its content, for example a label that grows with its text or a panel that grows with its items. It reads the preferred size of the content, often together with a Layout Group. It should not fight with a parent Layout Group that already controls the same size.
+
+Q: What is the difference between Mask and RectMask2D?
+A: Mask clips its child UI to the shape of its own Image, so it can make round or custom shapes, but it uses the stencil buffer and adds extra drawing work. RectMask2D clips to a rectangle in the Canvas plane without the stencil buffer. RectMask2D is usually preferred for scroll lists and rectangular areas, Mask when a custom shape is really needed, and the real cost difference is measured in the actual UI.
+
+Q: What is the difference between a SpriteRenderer and a UI Image?
+A: A SpriteRenderer draws a sprite in the world - it sorts with Sorting Layer and Order in Layer and moves with the camera view. A UI Image draws a sprite on a Canvas - it uses RectTransform, anchors and the Canvas draw order. SpriteRenderer is used for world art like an island or characters, and Image for screen UI like buttons and bars.
 
 Q: What is an Animation Clip?
-A: An Animation Clip is an asset with keyframes and curves over time - for example scale, position or colour alpha changing over 0.3 seconds. I record it in the Animation window. A clip can loop for idle motion or play once for show or hide.
+A: An Animation Clip is an asset with keyframes and curves over time - for example scale, position or colour alpha changing over a few tenths of a second. It is recorded in the Animation window or imported from another program. A clip can loop for idle motion or play once for show or hide, and it can be used in many Animator Controllers.
 
 Q: What is an Animator, and how is it different from an Animator Controller?
-A: The Animator is the component on the GameObject that plays animation. The Animator Controller is the asset it uses: a state machine with states, transitions and parameters, where each state plays a clip. So the clip is the motion, the controller decides which clip plays when, and the Animator runs it on the object. Many objects can share one controller.
+A: The Animator is the component on the GameObject that plays animation. The Animator Controller is the asset it uses: a state machine with states, transitions and parameters, where each state plays a clip or a Blend Tree. So the clip is the motion, the controller decides which clip plays when, and the Animator runs it on the object.
+
+Q: What is an Animator State?
+A: An Animator State is one box in the Animator Controller that plays a clip or a Blend Tree while it is active. It has settings like speed and its own transitions to other states. States like Idle, Show and Hide connected by transitions make the animation flow.
+
+Q: What is an Animator Transition?
+A: An Animator Transition is the arrow that moves the Animator from one state to another. It has conditions on parameters, an optional exit time, and a transition duration for blending between the two states. With Has Exit Time off and a short duration, the change reacts right away, for example to a tap.
+
+Q: What is an Animator Parameter?
+A: An Animator Parameter is a variable in the Animator Controller that transitions read. There are four types: Float and Int for values, Bool for a lasting state, and Trigger for a one-time event. Game code sets them, for example with SetTrigger, so the parameters are the bridge between game logic and animation.
 
 Q: What is an Animation Event?
-A: An Animation Event calls a function at an exact frame of a clip - for example to start a sound or a sparkle when a building lands. It's good for visual sync. Important game logic stays in code, because if the clip is skipped or interrupted, the event may never fire.
+A: An Animation Event calls a function at an exact frame of a clip - for example to start a sound or a sparkle when a building lands. It is good for keeping visuals in sync with the animation. Important game logic stays in code, because if the clip is skipped or interrupted, the event may never fire.
 
-Q: What is a Blend Tree and when do you use it?
-A: A Blend Tree is one Animator state that mixes several clips by a Float parameter, instead of jumping between separate states. The classic example is walk and run blended by speed, so the movement changes smoothly. A 1D tree uses one parameter, a 2D tree uses two, like direction X and Y. I use it when a value changes continuously and the look should follow it smoothly. For UI with clear states, like show, idle and hide, I don't need it - normal states and transitions are simpler.
+Q: What is a Blend Tree?
+A: A Blend Tree is one Animator state that mixes several clips by a Float parameter, instead of jumping between separate states. The classic example is walk and run blended by speed, so the movement changes smoothly. A 1D tree uses one parameter and a 2D tree uses two; for UI with clear states like show and hide, normal states and transitions are simpler.
+
+Q: What is tweening, and how is it different from the Animator?
+A: Tweening moves a value from A to B over time with an easing curve - for example scaling a button, sliding a panel or fading a colour. It is usually done from code, often with a library like DOTween, without a state machine. The Animator is better for objects with real states and transitions, while a tween is simpler for small one-time moves.
 
 Q: How do you decide between Animator, Timeline, tweening and code-driven animation?
-A: Animator for states that switch. Timeline for fixed sequences with many objects. Tweens for small UI moves. Code when game logic drives the motion. I pick the simplest tool that stays clear and easy to change.
+A: The Animator is for objects with states that switch, like a popup with show, idle and hide. Timeline is for fixed sequences with many objects and exact timing, like an intro or a reward sequence. Tweens are for small one-time UI moves, and code is for motion driven by game logic. The best choice is the simplest tool that stays clear and easy to change.
+
+Q: What is a Renderer?
+A: A Renderer is the component that actually draws an object - it holds the materials and decides whether and in what order the object is drawn. SpriteRenderer draws sprites, MeshRenderer draws a mesh, SkinnedMeshRenderer draws a mesh bent by bones, and ParticleSystemRenderer draws particles. They share common settings like materials, sorting and whether they are enabled.
+
+Q: What is the difference between a MeshRenderer and a SkinnedMeshRenderer?
+A: A MeshRenderer draws a regular mesh without skeletal deformation, together with a MeshFilter that gives it the geometry - like a rock, a building or a prop. A SkinnedMeshRenderer deforms a mesh with bones, weights and blend shapes, so it is used for animated characters and creatures. Skinning adds deformation work every frame, and skinned renderers have different batching limits from regular MeshRenderers, so on mobile the bone count, the weights per vertex and the number of skinned objects all matter.
+
+Q: What is a Material, and how is it different from a Shader?
+A: A Shader is the program that runs on the GPU and decides how pixels are drawn - lighting, textures, transparency. A Material is an asset that uses one shader and stores its values: colours, textures and numbers. One shader can have many materials with different settings, and objects that share the same material batch more easily.
+
+Q: What is Shader Graph?
+A: Shader Graph is Unity's visual tool for making shaders by connecting nodes instead of writing code. It works with URP and HDRP and shows a live preview of the result. It is commonly used for effects like dissolve, UV scroll, shine or glow, and HLSL is used when lower-level control or custom logic is needed.
+
+Q: What is URP?
+A: URP is the Universal Render Pipeline - Unity's scriptable render pipeline made to scale across many devices, including phones. It is set up through a URP Asset and a Renderer, works with Shader Graph and the SRP Batcher, and has a 2D Renderer for sprite games. It is the usual pipeline for new mobile projects.
+
+Q: What is the 2D Renderer?
+A: The 2D Renderer is a URP renderer made for 2D games. It is set in the URP Asset instead of the Universal Renderer, and it works with Sprite-Lit and Sprite-Unlit shaders. Its Renderer 2D Data asset holds 2D settings like Transparency Sort Mode and Custom Axis for sorting by Y, while each renderer's Sorting Layer and Order in Layer still decide most of the order.
+
+Q: What is a Render Texture?
+A: A Render Texture is a texture that rendering can target at runtime, for example a camera drawing into it instead of the screen. It can then be shown somewhere else - for example a 3D character inside a UI frame, or a minimap. It costs memory and additional rendering work whenever something renders into it, so its resolution and update frequency stay as low as the feature allows.
+
+Q: What is the difference between transparency and alpha clipping?
+A: Transparency blends a pixel with what is behind it using its alpha, so it gives smooth, soft edges and partly see-through areas - used for particles, glass, smoke and UI. Alpha clipping throws away pixels below an alpha threshold, so it gives hard cutout edges and behaves differently from blending. Transparency adds overdraw and sorting complexity when layers overlap, but alpha clipping is not automatically cheaper either, because discarding pixels can block some GPU optimizations - so the cost is measured on the target phone.
 
 Q: What is the Particle System?
-A: The Particle System is Unity's built-in system for effects made from many particles, such as sparks, smoke, dust and confetti. It has modules for emission, lifetime, shape, size, colour and movement: Main for lifetime, speed and size, Emission for how many, Shape for where they come from, and over-Lifetime modules for how they change. For mobile I watch particle count, particle size, overdraw and update cost.
+A: The Particle System is Unity's built-in system for effects made from many particles, such as sparks, smoke, dust and confetti. It is built from modules: Main for lifetime, speed and size, Emission for how many, Shape for where they come from, and over-Lifetime modules for how they change. On mobile the things to watch are particle count, particle size, overdraw and update cost.
+
+Q: What is VFX Graph, and how is it different from the Particle System?
+A: VFX Graph is Unity's node-based visual effects system that can simulate particles on the GPU, and it is designed for large and complex effects. The built-in Particle System is the simpler and more widely applicable choice, and it is the usual start for typical gameplay and mobile 2D effects. VFX Graph support depends on the Unity version, the render pipeline and the target hardware, so compatibility is checked before using it in a mobile project.
 
 Q: Additive or alpha blended particles?
 A: Additive for light, fire and sparks - it only makes things brighter. Alpha blend for smoke and dust that must cover what's behind. A soft white cloud usually needs alpha blending, because additive blending becomes hard to see against a bright background.
 
+Q: What is a draw call?
+A: A draw call is a rendering command the CPU sends to the GPU to draw a set of geometry with a given material and render state. Every draw call has a CPU cost for preparing it, so too many of them can slow the frame down on phones. Atlases, shared materials and a sensible draw order help keep their number and cost down.
+
+Q: What is batching?
+A: Batching is a group of techniques Unity uses to reduce rendering overhead. Some methods can reduce the number of draw calls - for example static batching, GPU Instancing, or 2D sprite batching when sprites share a texture and material. Others, like the SRP Batcher, keep the draw calls but reduce the CPU cost of setting them up.
+
+Q: What is the difference between static batching and dynamic batching?
+A: Static batching combines the meshes of eligible objects marked Static, so objects that never move can be drawn with less draw-call overhead - at the cost of extra memory for the combined meshes. Dynamic batching can combine some very small moving meshes at runtime, but it adds CPU work every frame and has strict limits. In current Unity versions dynamic batching is not something to rely on; it is measured on the target project to see if it helps at all.
+
+Q: What is GPU Instancing?
+A: GPU Instancing renders many copies of the same mesh with the same material in one instanced draw call, while each copy can still have its own transform and supported per-instance data. It is useful for many repeated objects like trees, rocks or crowds of the same prop. It is turned on in the material, and in the normal rendering path a renderer that is compatible with the SRP Batcher uses the SRP Batcher instead, so the two are not used together on the same renderer.
+
+Q: What is the SRP Batcher?
+A: The SRP Batcher is a URP and HDRP optimization that reduces the CPU cost of rendering. It keeps material data in GPU buffers, so the CPU spends less time setting up compatible draw calls for objects that use the same shader variant - even with different materials. It does not combine objects into one draw call; the number of draw calls stays the same, but the CPU-side setup gets cheaper. The shader has to be SRP Batcher compatible.
+
+Q: What is overdraw?
+A: Overdraw means rendering the same screen area more than once. In mobile 2D the common cause is transparent layers that overlap - particles, UI panels and transparent sprites. Every extra layer costs GPU time, which hurts most on phones. In URP it is visualized with the Rendering Debugger's overdraw view, and it is reduced with tight meshes, smaller particles and fewer full-screen transparent images.
+
+Q: What is fill rate?
+A: Fill rate is roughly how many pixels the GPU can process in a given amount of time. On phones big transparent layers, big particles, post-processing and high resolution use a lot of it, because the same screen pixels are processed many times. Lowering the Render Scale and seeing the frame time improve a lot is a useful clue that pixel processing is the bottleneck.
+
+Q: What is the difference between CPU-bound and GPU-bound?
+A: CPU-bound means the processor is the slow part - scripts, UI rebuilds, animation, physics or preparing draw calls - and the GPU waits for work. GPU-bound means the graphics chip is the slow part - too many pixels, overdraw, heavy shaders, or high texture sampling and bandwidth cost - and the CPU waits for the GPU. It is found in the Profiler by comparing CPU and GPU frame time and the wait markers, not from one marker alone, because each case needs a different fix.
+
+Q: What is frame time, and how is it related to FPS?
+A: Frame time is how long one frame takes, in milliseconds. FPS is how many frames fit into one second, so 60 FPS means about 16.6 ms per frame and 30 FPS about 33.3 ms. Frame time is easier to work with, because it adds up - if UI takes 4 ms and particles 3 ms, it is clear what eats the budget - and the worst frames matter more than the average, because spikes are what players feel.
+
+Q: What are garbage collector allocations?
+A: Garbage collector allocations are memory that the code allocates while the game runs, which the garbage collector later has to clean up. Repeated allocations create garbage and more collection work, which can make frames slower or cause spikes. Hot code that runs every frame should avoid unnecessary allocations, while an occasional allocation, like on a button press, is usually fine, and the Profiler shows where they come from.
+
 Q: What is the Unity Profiler?
-A: The Profiler is Unity's tool for measuring where the time and memory go in each frame - CPU, GPU, rendering, memory, UI and more. I connect it to a development build on the phone, find the worst frames and the biggest markers, and then change one thing at a time. It tells me what is actually slow, so I don't optimize by guessing.
+A: The Profiler is Unity's tool for measuring where time and memory go in each frame - CPU, GPU, rendering, memory, UI and more. It can connect to a development build on a real phone, which gives the real numbers instead of the Editor's. It is used to find the worst frames and the biggest markers, so optimization is based on measurement, not guessing.
 
 Q: What is the Frame Debugger?
-A: The Frame Debugger lets me step through one frame, draw call by draw call. I see what is drawn, in what order, with which material and shader, and how batches are grouped. I use it to find why batching broke or why something draws in the wrong order.
+A: The Frame Debugger lets you step through one frame, draw call by draw call. It shows what is drawn, in what order, with which material and shader, and how batches are grouped. It is used to find why batching broke or why something draws in the wrong order.
 
-Q: What is an AssetPostprocessor?
-A: An AssetPostprocessor is an editor script that runs code before or after Unity imports an asset. I would use it to apply the same importer settings automatically - for example compression, Max Size and Read/Write per folder - instead of asking artists to set every asset by hand. It's part of keeping the art pipeline consistent.
+Q: What is texture compression?
+A: Texture compression stores pixels in a GPU format that takes much less memory and stays compressed on the GPU. An uncompressed RGBA texture uses 4 bytes per pixel, and a compressed one is smaller - how much depends on the format and block size. The trade-off is quality, so the format and settings are chosen per platform and checked on a real phone.
+
+Q: What is a texture format?
+A: A texture format is the exact way texture data is stored on the GPU - compressed or uncompressed. It decides memory use, quality and which devices can read it. It is set per platform in the import settings.
+
+Q: What is a mipmap?
+A: A mipmap is a chain of smaller copies of a texture - half size, quarter size and so on. The GPU uses an appropriate smaller copy when the object is far away or small on screen, which reduces aliasing and unnecessary texture sampling. The chain adds texture memory, so for UI and 2D shown at a fixed size mipmaps are usually turned off, while textures that get much smaller on screen can benefit from them.
+
+Q: What is Max Texture Size?
+A: Max Texture Size is an import setting that limits the biggest size a texture can have in the build; bigger source images are scaled down on import. It is one of the easiest ways to save memory and download size. The value comes from how big the asset really is on screen, not from the size of the source file.
+
+Q: What is Read/Write Enabled?
+A: Read/Write Enabled is a texture import option that keeps an additional CPU-accessible copy of the texture data, so code can read or change its pixels at runtime. That copy increases memory use for that texture. It stays off unless code really needs to read or write the pixels.
 
 Q: What are Addressables?
-A: Addressables are Unity's system for loading assets by an address instead of referencing everything directly in a scene. Content can load from inside the app or from a server, and Addressables handle dependencies and give me handles to release memory. I'd use it for optional or live content, like events or new islands, that doesn't have to be in the first app build.
+A: Addressables are Unity's system for loading assets by an address instead of referencing everything directly in a scene. Content can load from inside the app or from a server, Addressables handle dependencies, and every load returns a handle that the game code releases when the content is no longer needed. It is used for optional or live content, like events or new islands, that doesn't have to be in the first app build.
+
+Q: What is an Addressable asset?
+A: An Addressable asset is any asset marked as Addressable, so it gets an address and goes into an Addressables group. The game loads it by address or label at runtime, instead of through a direct scene reference. The load is asynchronous, and the game code releases the handle when the asset is no longer needed.
 
 Q: What is an Addressables group?
-A: An Addressables group is a collection of Addressable entries with shared group-level build and loading settings: where they load from, compression, and how they are packed into bundles. I usually organize groups around when content is needed, how it is loaded and how often it changes - for example core content local, each island in its own remote group.
+A: An Addressables group is a collection of Addressable entries with shared build and loading settings: where they load from, compression, and how they are packed into bundles. Groups are usually organized around when content is needed, how it is loaded and how often it changes - for example core content local and each island in its own remote group.
+
+Q: What is an Addressables catalog?
+A: A catalog maps the addresses to the content and dependencies needed to load them. The game reads it to find and load content. With a correctly set up remote catalog and content-update workflow, an already released app can find compatible updated content without a new app build.
+
+Q: What is an Addressables label?
+A: A label is a tag put on Addressable entries, like "island_3" or "event_halloween". Labels can be used to load or query a set of related assets, and to check the download size of that set before loading it. Label names are kept simple and consistent, because a wrong label can mean missing or unexpected content.
 
 Q: What is an AssetBundle, and how is it different from Addressables?
-A: An AssetBundle is the archive file that holds assets for loading at runtime - it is the low-level format. Addressables are a system built on top of AssetBundles: they build the bundles for me, track dependencies, handle local and remote loading and reference counting. So I work with Addressables, and AssetBundles are what they produce underneath.
+A: An AssetBundle is a Unity archive file that holds assets for loading at runtime - it is the lower-level content format. Addressables is a higher-level content system that uses AssetBundles to package and deliver content, while it handles addresses, dependencies, local or remote loading and reference counting. So AssetBundles are the format, and Addressables is the layer that manages content on top of them.
 
-Q: What is a catalog in Addressables?
-A: A catalog is a list of all addresses and where each bundle lives. With a remote catalog, the game can find and download compatible new content and new versions without a new app build.
+Q: What is the Resources folder, and how is it different from Addressables?
+A: Assets in a Resources folder are always included in the build, even if no scene references them, and they are loaded by name through the Resources API. They can be loaded and unloaded by hand, but Resources is not designed for remote delivery or incremental content updates, and it gives little control over build size and dependencies. Addressables add address-based loading, dependency management and local or remote content, which makes them more suitable for live content that grows.
 
-Q: What are Addressables Labels and how do you use them?
-A: A label is a tag I put on Addressable entries, like "island_3" or "event_halloween". The code can then load everything with that label in one call, instead of listing every address by hand. Labels also help me check the download size of a set of content before I load it, so I can show a progress bar or ask the player first. And Pack Together By Label can build bundles from shared label sets. I keep label names simple and agreed with the team, because a typo in a label means the content just doesn't load.
-
-Q: What is the difference between Resources and Addressables?
-A: Assets in a Resources folder are included in the build even if no scene references them. With Resources I have less control over when things load and unload, and over content updates, so I don't use it for live content that grows. Addressables load from the phone or from a server, and give me handles that I release when I'm done. Addressables also handle dependencies for me.
-
-Q: How do you decide whether Addressables content should be local or remote?
-A: I start from when the player needs the content. What the first session really needs should be local and work without internet. Remote Addressables are good for optional content, future content, or content that changes often. I also test the first session with no network.
+Q: What is the difference between local and remote Addressables?
+A: Local Addressables are built into the app and are available right away, even without internet. Remote Addressables are hosted on a server and downloaded when needed, so new events and content can arrive without a new app build. Content for the first session stays local, and optional, future or often-changing content goes remote - and it must stay compatible with the app version already installed.
 
 Q: What is a build, and what is a Development Build?
-A: A build is the packaged output of a Unity project for a target platform, such as an Android APK or AAB, or an iOS build that goes through Xcode. A Development Build adds debugging support, so I can connect the Profiler, see more logs and stack traces. It is slower and bigger than a release build, so I use it to find problems, and I check the final numbers on a release build too.
+A: A build is the packaged output of a Unity project for a target platform, such as an Android app package, or an iOS build that goes through Xcode. A Development Build adds debugging support, so the Profiler can connect and more logs and stack traces are available. It is slower and bigger than a release build, so it is used to find problems, and the final numbers are checked on a release build too.
 
-Q: What is IL2CPP, and how is it different from Mono?
-A: Mono and IL2CPP are the two scripting backends that run my C# code. Mono runs the code through a runtime and can compile it just in time on some platforms. IL2CPP converts it to C++ and then to native code ahead of time, which is what mobile builds commonly use, and iOS requires it. The build with IL2CPP takes longer, and stripping can remove code used only through reflection, so I check that.
+Q: What is an AssetPostprocessor?
+A: An AssetPostprocessor is an editor script that runs code before or after Unity imports an asset. It is used to apply the same import settings automatically - for example compression, Max Size and Read/Write per folder - instead of setting every asset by hand. It helps keep the art pipeline consistent.
 
 Q: What is the difference between EditMode and PlayMode tests?
-A: EditMode tests run in the Editor without Play - fast, and good for tools and data checks. PlayMode tests run real frames with the game systems working - that's what you need for gameplay and UI animation.
+A: EditMode tests run in the Editor without Play - fast, and good for tools and data checks. PlayMode tests run real frames with the game systems working, which is needed for gameplay and UI animation.
 
 --- QUESTIONS ABOUT MY HOME ASSIGNMENT (they discuss it in the interview) ---
 
@@ -894,19 +967,19 @@ Q: Why is the island made of sprites and not UI?
 A: The island lives in the world, not on the screen. World sprites give me the normal 2D renderer and sorting control, and I can put particles in the same sorting order when I need them between items. The camera shows the world so it fills the screen. I used UI only for things pinned to the screen, like buttons and text.
 
 Q: Why are a shadow and its item in one atlas?
-A: They are usually drawn next to each other, so putting them in one atlas gives them a chance to batch without a texture switch. If they were in different atlases, the texture would switch on every item and break the batch.
+A: They are usually drawn next to each other, so putting them in one atlas gives them a chance to batch without a texture switch. If they were in different atlases, drawing them in an interleaved order could need extra texture switches and split the batch.
 
 Q: What did you leave outside atlases?
-A: The island base at 2241 pixels - it is too big for the atlas - plus the sky gradient and the cloud flipbook. I also kept out a few sprites whose custom shaders depend on the original 0-1 UVs, because atlas packing changes those UVs.
+A: The island base at 2241 pixels - it was too big for the 2048 atlas I used, so I kept it separate - plus the sky gradient and the cloud flipbook. I also kept out a few sprites whose custom shaders depend on the original 0-1 UVs, because atlas packing changes those UVs.
 
 Q: Why is the island remote?
 A: Players get to islands later in the game, and new islands come out after launch. The main UI must work without internet, so it stays local, but islands can be remote.
 
 Q: What would you do with more time?
-A: Real remote loading with a progress bar, and profiling on a weak Android to see where the time really goes. I would also check ASTC quality on real phones.
+A: Real remote loading with a progress bar, and profiling on a weak Android to see where the time really goes. I would also check the texture compression quality on real phones.
 
 Q: What is the SRP Batcher, and did you use it in the assignment?
-A: Before every draw call the CPU prepares data for the GPU: the material and its values, the object position. The SRP Batcher keeps material data in GPU buffers, so the CPU doesn't have to set it all up again for every draw call. It does not cut the number of draw calls - it makes each one cheaper for the CPU. It works only with compatible shaders that keep material values in the UnityPerMaterial buffer; standard URP shaders and compatible Shader Graph shaders can use it. Objects must use the same shader variant - materials can be different, but other keywords split the batch. A MaterialPropertyBlock makes a renderer not compatible with the SRP Batcher, so for per-object differences I prefer vertex color. I check it in the Frame Debugger, where I look at the draw sequence and the batch information, and in the shader Inspector, which shows if a shader is compatible. In the assignment it was on by default in the URP asset. I didn't tune it separately, but I kept it working: shared Shader Graph materials, no MaterialPropertyBlock, vertex color for variation. For 2D sprites, atlases and draw order mattered most. On a real project I would check it in the Frame Debugger and measure on the phone.
+A: Before every draw call the CPU prepares data for the GPU: the material and its values, the object position. The SRP Batcher keeps material data in GPU buffers, so the CPU doesn't have to set it all up again for every draw call. It does not cut the number of draw calls - it makes each one cheaper for the CPU. It works only with compatible shaders; standard URP shaders and compatible Shader Graph shaders can use it. Objects must use the same shader variant - materials can be different, but other keywords split the batch. A per-object property override can make a renderer incompatible with the SRP Batcher, so for per-object differences I prefer vertex color. I check it in the Frame Debugger, where I look at the draw sequence and the batch information, and in the shader Inspector, which shows if a shader is compatible. In the assignment, the SRP Batcher was enabled in the URP asset. I didn't tune it separately, but I kept it working: shared Shader Graph materials, no per-object property overrides, vertex color for variation. For the 2D part I mainly relied on Sprite Atlases, shared materials and controlled draw order - the SRP Batcher matters more for compatible mesh-based rendering. On a real project I would check it in the Frame Debugger and measure on the phone.
 
 Q: What was the hardest?
 A: Getting the animation timing to match the reference video, so the next action is ready in under 2 seconds. It has to feel quick.
@@ -1021,7 +1094,7 @@ Q: Why is profiling in the Editor not enough?
 A: The Editor does its own extra work, and a PC is much faster than a phone. I use the Editor for iteration and debugging, but I don't treat its timings as final - for performance decisions I check on the target phone, especially a weak one. I also test a release build, because some problems show up only there.
 
 Q: What creates garbage in UI code that people forget?
-A: Building strings every frame, creating new lists, and some closures or LINQ in code that runs every frame. GetComponent in Update is a different problem - it is a repeated search, not garbage in a build - so I save the reference once if the call runs often. I update text only when the value changes, and I use SetText. FindObjectOfType in code that runs often is a bad idea, because it searches through loaded objects and is slow. So I use saved references, and if I really need a search, I use the search API that fits the project's Unity version.
+A: Building strings every frame, creating new lists, and some closures or LINQ in code that runs every frame. Looking up components or searching for objects every frame is a different problem - it is slow searching, not garbage - so I save the reference once. I update text only when the value changes.
 
 Q: The frame rate is fine but the game feels stuttery. Why?
 A: Some frames are much slower than the rest - garbage collection, loading or shader compile. The average FPS hides them. I look at the frame time graph to see the worst frames.
@@ -1044,7 +1117,7 @@ Q: How do you reduce shader cost on mobile without killing the look?
 A: First I cut texture samples and heavy math. Then I switch from Lit to Unlit if the look allows it. The number of nodes is not the whole cost - what matters is what the graph turns into and how heavy that is on the phone's GPU. I use half where the precision is enough, because it can make the shader cheaper on mobile GPUs. If a calculation can move to the vertex shader without changing how it looks, I move it, so it isn't done again for every pixel. I keep keywords low, because each combination builds a separate variant. Then I measure on the real phone to see if it helped.
 
 Q: What breaks SRP Batcher compatibility?
-A: If the shader doesn't have the UnityPerMaterial buffer, or if you put a MaterialPropertyBlock on the renderer, it falls out of the batcher. You can see in the shader Inspector if it is compatible.
+A: If the shader isn't written to be compatible, or if a per-object property override is put on the renderer, it falls out of the batcher. You can see in the shader Inspector if it is compatible.
 
 Q: How do keywords affect batching?
 A: Each keyword combination is a different shader variant. Two materials with the same shader but different keywords won't batch together. So fewer keywords means more chances to batch.
@@ -1056,14 +1129,14 @@ Q: What does a magenta or cyan object mean?
 A: Magenta is the error shader - the shader is missing, broken, not supported on that platform, or it is a Built-in shader in URP where it doesn't work. In the Editor, a cyan placeholder can appear while a shader is still compiling. If it's pink only on the phone, a missing or stripped shader variant is one possible reason. I would also check if the shader is supported, look for compile errors, and read the player log, instead of just guessing it was stripped.
 
 Q: A shader variant freezes the game on first use. How do you avoid it?
-A: I prewarm the needed variants during loading with ShaderVariantCollection.WarmUp, so the first use is less likely to freeze. I still profile on the phone, because DX12, Vulkan and Metal can need extra work from the driver.
+A: I prewarm the needed shader variants during loading, so the first use is less likely to freeze. I still profile on the phone, because DX12, Vulkan and Metal can need extra work from the driver.
 
 Q: Sprite-Lit or Sprite-Unlit?
-A: Sprite-Lit is for sprites that need the project's 2D lighting. Sprite-Unlit ignores lighting and is good for UI-like sprites and effects that should keep their own look. I choose by what the art needs and what it costs when I measure.
+A: Sprite-Lit is for sprites that need the project's 2D lighting. Sprite-Unlit ignores lighting and is good for world sprites and effects that don't need 2D lighting. I choose by what the art needs and what it costs when I measure.
 
 Q: How do you animate a material without breaking batching?
-A: I animate one shared value or use shader time, maybe with a small difference per object in the vertex colour for variety. MaterialPropertyBlock in URP usually takes the object out of the SRP Batcher, so I try to avoid it.
-FOLLOW-UP: What if I need per-object material animation? -> I use vertex colour or the object's position instead of MaterialPropertyBlock. If that doesn't work, I accept the lost batch and measure if it matters.
+A: I animate one shared value or use shader time, maybe with a small difference per object in the vertex colour for variety. A per-object property override in URP can take the object out of the SRP Batcher, so I try to avoid it.
+FOLLOW-UP: What if I need per-object material animation? -> I use vertex colour or the object's position instead of a per-object property override. If that doesn't work, I accept the lost batch and measure if it matters.
 
 Q: How do you make a dissolve effect?
 A: A noise texture is compared with a threshold - pixels below it disappear. A thin bright band right at the threshold looks like burning or a glowing edge. Moving the threshold from 0 to 1 dissolves the object.
@@ -1085,7 +1158,7 @@ Q: What is the dot product and where do you use it?
 A: It's a number that says how much two directions point the same way: 1 means the same direction, 0 means a right angle, -1 means opposite. I use it for lighting (normal and light direction), for a rim around an object (normal and view direction), and for masks based on angle.
 
 Q: What is the difference between a vertex and a fragment shader?
-A: The vertex shader runs once per vertex, the fragment shader once per pixel. There are many more pixels, so any smooth calculation that can be blended between vertices I move to the vertex shader.
+A: The vertex shader runs once per vertex, the fragment shader roughly once per drawn pixel. There are many more pixels, so any smooth calculation that can be blended between vertices I move to the vertex shader.
 
 Q: When half and when float?
 A: half for colour, directions and small numbers when its precision is enough - on phones that support it, it can make the shader cheaper or save power. I don't assume it is faster; I check it on the target GPU. float for values where half is not precise enough and you can see it - big world positions or big growing coordinates - because then the image crawls or shakes.
@@ -1117,13 +1190,13 @@ A: Atlases per screen, shared materials, a draw order that avoids texture switch
 FOLLOW-UP: How do you find the biggest win? -> I step through the Frame Debugger and look at what changes between calls - material, texture, shader pass or keyword, sorting, masking. If it's texture switches, I change the draw order or use atlases.
 
 Q: What is the difference between static batching, dynamic batching, GPU instancing and the SRP Batcher?
-A: Static batching joins meshes that don't move at build time. Dynamic batching can join some small meshes, but Unity today doesn't recommend counting on it. GPU Instancing draws many copies of the same mesh cheaply. The SRP Batcher makes each draw call cheaper for the CPU, but doesn't cut the number of calls. For 2D sprites in URP the main ones are the SRP Batcher and atlases.
+A: Static batching joins meshes that don't move at build time. Dynamic batching can join some small meshes, but Unity today doesn't recommend counting on it. GPU Instancing draws many copies of the same mesh and material in one instanced draw call. The SRP Batcher makes each draw call cheaper for the CPU, but doesn't cut the number of calls, and it matters most for compatible mesh-based rendering. For 2D sprites the main tools are Sprite Atlases, shared materials and draw order.
 
 --- TEXTURES AND COMPRESSION ---
 
 Q: Which compression format for iOS/Android and why?
-A: ASTC, because on modern phones it usually gives a good balance of quality and size. I pick the block size by how important the asset is - for example 4x4 for UI, 6x6 for items, 8x8 for soft shadows as a starting point. ETC2 as a fallback for old Android. And I compare the result on a real phone.
-FOLLOW-UP: What if ASTC makes one asset look bad? -> I check the block size: 4x4 keeps more detail than 6x6 but uses more memory. I measure if a smaller block or a smaller texture is the better answer.
+A: The modern compressed format that most phones support, because it usually gives a good balance of quality and size. I pick the compression strength by how important the asset is - higher quality for UI and text, stronger compression for soft shadows - and an older format as a backup for devices that don't support it. And I compare the result on a real phone.
+FOLLOW-UP: What if compression makes one asset look bad? -> I lower the compression for that asset: it keeps more detail but uses more memory. I measure if less compression or a smaller texture is the better answer.
 
 Q: Why not one big atlas for the whole game?
 A: A sprite atlas packs sprites into one texture, so loading the atlas can bring sprites you don't need into memory with the rest of it. That's why I usually split atlases by screen or feature, especially for content that is not used at the same time.
@@ -1135,7 +1208,7 @@ Q: How do you plan atlases for a screen?
 A: I group sprites by usage - what is shown together on the same screen goes together, and I keep UI apart from world art. Then I think about loading and memory: when any sprite from an atlas is needed, the whole atlas texture is in memory, so I don't put a rarely used popup into the atlas of the main screen, and content that loads remotely, like one island, gets its own atlas. For batching, sprites that draw one after another should share an atlas, otherwise the texture switches between them. Compression is a separate decision: I choose it per atlas by how important the art is visually and by the platform, and I check the result on the phone.
 
 Q: Why turn off Read/Write and mipmaps?
-A: Read/Write can keep an additional CPU-side copy of the texture, which increases memory use. So I turn it off when no code needs to read the pixels. A full mip chain adds about one third more texture memory, so I usually turn mipmaps off for fixed-size UI. World sprites that get much smaller on screen can still need them.
+A: Read/Write keeps an additional CPU-accessible copy of the imported texture data, which increases memory use. So I turn it off when no code needs to read the pixels. A full mip chain adds about one third more texture memory, so I usually turn mipmaps off for fixed-size UI. World sprites that get much smaller on screen can still need them.
 
 Q: Why keep source art uncompressed when using an atlas?
 A: The source sprite is my master quality. For sprites packed into an atlas, the atlas controls the final packed texture and its compression, so I keep the source clean and let the atlas and platform settings control the final compression. That gives me one place to judge the final quality and avoids unnecessary quality loss before packing, and I check the final atlas on the phone.
@@ -1147,7 +1220,7 @@ Q: How do you set a sprite pivot and why does it matter?
 A: I set it in the Sprite Editor. The pivot is the point used for position, rotation and scale, and it can also be used as the Sprite Sort Point. For standing objects I usually put it at the bottom, so Y-sorting uses the character's feet.
 
 Q: What does Sprite Atlas "Include in Build" do?
-A: On: the atlas is part of the build. Off: it is not included through that setting, so if I want the atlas to arrive later, I need another delivery path, such as Addressables or late binding through atlasRequested.
+A: On: the atlas is part of the build. Off: it is not included through that setting, so if I want the atlas to arrive later, I need another delivery path, such as Addressables or late binding.
 
 Q: A sprite has a thin line or halo at its edge. How do you fix it?
 A: I first check for colour bleeding from neighbouring sprites or transparent pixels. Then I check atlas padding, Alpha Is Transparency and the source edges, and compare the result on the device.
@@ -1176,7 +1249,7 @@ Q: How do you keep particle effects cheap on mobile?
 A: Few systems, one shared unlit material, low Max Particles, little overdraw, and no unnecessary lights or collisions. For effects that don't need to keep simulating off-screen, I use a culling mode that lets them pause when they're not visible.
 
 Q: How do you decide how many particles is too many?
-A: I measure the effect on the weakest phone together with the rest of the screen. For transparent particles overdraw is often the big limit, but I also check ParticleSystem.Update and measure both CPU and GPU cost.
+A: I measure the effect on the weakest phone together with the rest of the screen. For transparent particles overdraw is often the big limit, but I also check the particle simulation time and measure both CPU and GPU cost.
 
 Q: What if an effect must be very big for one moment?
 A: I make it short and keep other effects quiet at that moment. Sometimes fewer larger particles give the same impact, but bigger particles can mean more overdraw, so I check it. Then I test that exact frame on a weak phone.
@@ -1185,7 +1258,7 @@ Q: Why use Prewarm?
 A: Prewarm starts a looping effect as if it has already been running for a while, so the first frame looks full, not empty - like smoke from a chimney. I use it when the effect must look like it was always there.
 
 Q: How do you pool particle effects, and what goes wrong most often?
-A: When the effect ends, Stop Action = Callback calls OnParticleSystemStopped, and my pool code puts it back in the pool. I reset it when I take it out again. Common bugs: using an effect that is still playing, returning it twice, or old colour and scale left over. If Stop Action is Destroy, that effect is destroyed instead of being returned to the pool, so I use Callback for pooled effects.
+A: When the effect ends, Stop Action set to Callback tells my pool code, and it puts the effect back in the pool. I reset it when I take it out again. Common bugs: using an effect that is still playing, returning it twice, or old colour and scale left over. If Stop Action is Destroy, that effect is destroyed instead of being returned to the pool, so I use Callback for pooled effects.
 
 Q: What do you check if a particle effect does not appear?
 A: Is it playing and on screen? Sorting layer and order, material and shader, Max Particles and emission. I also check the camera's culling mask and the Simulation Space.
@@ -1200,7 +1273,7 @@ Q: What are the most common VFX performance problems on mobile?
 A: Overdraw from big transparent particles, too many particles, a different material for every system, and effects that keep running off screen. I fix them with size, count, one shared material, and Culling Mode.
 
 Q: How do you determine whether a particle effect is CPU-bound or GPU-bound?
-A: I compare the CPU and GPU frame time first. If ParticleSystem.Update or other simulation work is heavy on the CPU, I use fewer particles or fewer heavy modules. If the GPU is the problem, I look at particle size, overdraw, transparency, and how many effects overlap.
+A: I compare the CPU and GPU frame time first. If the particle simulation is heavy on the CPU, I use fewer particles or fewer heavy modules. If the GPU is the problem, I look at particle size, overdraw, transparency, and how many effects overlap.
 
 Q: Why can fewer particles still be slower than more particles?
 A: The number of particles alone doesn't tell me the GPU cost. Big transparent particles can cover a lot of the screen and cause heavy overdraw. So I look at both the simulation cost and how much of the screen they cover.
@@ -1217,8 +1290,7 @@ A: I turn on the Trails module, give it its own material, and keep the trail sho
 --- UI (Canvas, uGUI, TextMeshPro) ---
 
 Q: How do you optimize a complex UI screen on mobile?
-A: First I profile the screen on the device, to see if UI rebuilds are really the cost - for example if Canvas.SendWillRenderCanvases is taking a large part of the frame. If a large Canvas rebuilds because of one element that changes often, like a timer, I move that dynamic part to its own Canvas, so the static part is left alone. I use shared atlases, and I turn Raycast Target off on decoration, because extra raycast targets mean extra work. Then I look for full-screen transparent panels and heavy Layout Groups - they are common problems.
-FOLLOW-UP: What does Canvas.SendWillRenderCanvases tell you? -> It shows that UI update and rebuild work happens before drawing. If it is big every frame, I look at the more detailed UI markers to find what changed.
+A: First I profile the screen on the device, to see if UI rebuilds are really the cost - for example if UI rebuilds take a large part of the frame. If a large Canvas rebuilds because of one element that changes often, like a timer, I move that dynamic part to its own Canvas, so the static part is left alone. I use shared atlases, and I turn Raycast Target off on decoration, because extra raycast targets mean extra work. Then I look for full-screen transparent panels and heavy Layout Groups - they are common problems.
 
 Q: How do you set up a Canvas for a portrait mobile game?
 A: First I use the Canvas Scaler with Scale With Screen Size and a reference resolution like 1080 by 2400. Then I choose the Match value for the portrait layout. I start with a balanced value and adjust it after testing different aspect ratios, rather than assuming one value works for every phone. I put the buttons inside a Safe Area root, so they don't hide under the notch. Then I test on the narrowest and the tallest phones I can find.
@@ -1242,10 +1314,10 @@ Q: Why is Graphic Raycaster a cost?
 A: The Graphic Raycaster raycasts against the Graphics on its Canvas that have Raycast Target on, so I turn it off on decoration to cut extra work. I also remove the Raycaster from Canvases that don't take input. If the whole background must be tappable, I use one invisible target instead of making every image tappable.
 
 Q: How do you handle the notch on phones?
-A: I use a Safe Area root that follows Screen.safeArea. The top and bottom bars sit inside it, so they stay away from the notch. Backgrounds can still stretch under the notch, edge to edge. I don't shrink the whole Canvas just to handle the notch, because that wastes screen space.
+A: I use a Safe Area root that follows the safe area of the screen. The top and bottom bars sit inside it, so they stay away from the notch. Backgrounds can still stretch under the notch, edge to edge. I don't shrink the whole Canvas just to handle the notch, because that wastes screen space.
 
 Q: How do you fade a whole popup?
-A: For my UI animations I usually animate the color alpha of the Image or TextMeshProUGUI. If I need to fade and control the whole popup at once, CanvasGroup works too. While the popup is hidden I also turn off interactable and blocksRaycasts, so the player can't tap it by accident.
+A: For my UI animations I usually animate the color alpha of the Image or TextMeshProUGUI. If I need to fade and control the whole popup at once, CanvasGroup works too. While the popup is hidden I also turn off its input, so the player can't tap it by accident.
 
 Q: How do you make a popup Show and Hide?
 A: For Show I scale up from small and fade in at the same time, with a small overshoot, about 0.3 to 0.5 seconds. Hide is the reverse but faster, about 0.2 seconds, with no overshoot. These timings are a design choice from the reference, not a Unity rule. I block input while the animation plays.
@@ -1293,8 +1365,8 @@ A: For normal 2D work I first control the order with Sorting Layer and Order in 
 Q: How do you sort sprites by Y?
 A: In URP 2D I set Transparency Sort Mode to Custom Axis (0, 1, 0) on the Renderer 2D Data. All the sprites use the same Sorting Layer and Order in Layer. Sprite Sort Point is set to Pivot, and the pivot is at the bottom of each sprite.
 
-Q: When would you use Transparency Sort Mode instead of manually setting SpriteRenderer.sortingOrder?
-A: If objects should sort by their position in the world, I let Unity's 2D sorting do it instead of changing sortingOrder every frame. Manual sorting is useful for special cases where the normal world-space sorting rule isn't enough. If I do it by hand, I avoid recalculating sortingOrder every frame unless I really need that custom behaviour.
+Q: When would you use Transparency Sort Mode instead of setting Order in Layer by hand?
+A: If objects should sort by their position in the world, I let Unity's 2D sorting do it instead of changing Order in Layer every frame. Manual sorting is useful for special cases where the normal world-space sorting rule isn't enough. If I do it by hand, I avoid recalculating the order every frame unless I really need that custom behaviour.
 
 Q: What problem does SortingGroup solve in a 2D game?
 A: SortingGroup makes several SpriteRenderers sort as one object. I use it when a character or an object is made of many sprites that must keep their order inside, while the whole object sorts against other objects.
@@ -1325,7 +1397,7 @@ Q: When do you NOT use the Animator for UI?
 A: For small one-time UI moves I usually prefer a tween, because it keeps the animation simple and I don't need a state machine for it. An Animator can also keep evaluating its state while the object is active, so if it changes UI values that affect layout or appearance, it can add unnecessary work. So for small one-time moves I use a tween, or I turn the Animator off when the clip ends. For UI with real states, like a popup with show, idle and hide, the Animator is fine.
 
 Q: How do Animator parameters work?
-A: There are four types: Float and Int for values, Bool for a lasting state, and Trigger for a one-time transition. Code changes them with SetFloat, SetInt, SetBool and SetTrigger. A Trigger is consumed by a transition, while a Bool stays until I change it.
+A: There are four types: Float and Int for values, Bool for a lasting state, and Trigger for a one-time transition. Code changes them, for example with SetTrigger. A Trigger is consumed by a transition, while a Bool stays until I change it.
 
 Q: Trigger or Bool?
 A: Bool for states that last, like IsOpen or IsMoving. Trigger for one-time actions, like Show or Build. If several transitions can happen close together, I keep the state logic clear - often with Bools - instead of firing many triggers in the same frame.
@@ -1343,10 +1415,10 @@ Q: How do you sync a sound or VFX with an animation?
 A: I put an Animation Event on the exact frame where the sound or effect should start. For precise sync I prefer an Animation Event or an explicit state change, instead of waiting for a value like "rotation equals 90" - Unity can skip that exact value between frames.
 
 Q: What should an animation never decide?
-A: An animation should never decide game logic. It should never check if a purchase worked or give a reward. The animation only shows what already happened. If logic lives in a clip and the player closes the screen in the middle of it, the logic is lost.
+A: An animation should never decide game logic. It should never check if a purchase worked or give a reward. The animation only shows what already happened. If important logic depends on an animation event, interrupting the animation can stop that event from firing.
 
 Q: How do you handle an animation that must stop on the last frame?
-A: I turn Loop Time off, so the state stays on the last frame. For something visual, like a sound or a sparkle, I can put an Animation Event on that frame - but important game logic stays in code and state. A reward or a purchase never waits for an animation to finish.
+A: I turn Loop Time off so the clip ends on its last frame, and I make sure no transition moves the object away if it must stay there. For something visual, like a sound or a sparkle, I can put an Animation Event on that frame - but important game logic stays in code and state. A reward or a purchase never waits for an animation to finish.
 
 Q: When do you use Timeline?
 A: I use Timeline for one-time sequences with many objects and exact timing - like an intro, a reward sequence, or a level complete screen. If something has states that switch back and forth, I use the Animator instead.
@@ -1380,16 +1452,16 @@ A: I take a snapshot, do the action, like opening a screen, take another one and
 FOLLOW-UP: How do you find what is holding a reference? -> In the Memory Profiler I select the object and look at what still references it in the snapshot, to see what keeps it alive. Then I check that owner in the code.
 
 Q: Why can Destroy not free memory right away?
-A: Destroy removes the object, but an asset can stay loaded if something else still uses it. With Addressables I release the handle, and Unity can unload the bundle once nothing needs it. For Resources and other assets, Resources.UnloadUnusedAssets is a separate step - and heavy on the CPU, so I call it at safe moments, like a loading screen.
+A: Destroy removes the object, but an asset can stay loaded if something else still uses it. With Addressables I release the handle, and Unity can unload the bundle once nothing needs it. For Resources and other assets, unloading unused assets is a separate step - and heavy on the CPU, so I call it at safe moments, like a loading screen.
 
 Q: How do you load a scene without freezing?
-A: I use LoadSceneAsync, and Addressables where it fits, so the loading doesn't block the game, and I show a loading screen. I still profile the scene start, asset loading and any spikes on the main thread, because async loading doesn't make every part of loading free.
+A: I load the scene asynchronously, and with Addressables where it fits, so the loading doesn't block the game, and I show a loading screen. I still profile the scene start, asset loading and any spikes on the main thread, because async loading doesn't make every part of loading free.
 
 Q: How would you split Addressables groups?
 A: I split by when the content is needed and how often it changes. I start with the core content that the first session needs locally. Features and optional islands can go into remote groups. Shared assets get their own group when that reduces duplication. That way a player only downloads what they use.
 
 Q: How do you release memory from Addressables?
-A: I keep the AsyncOperationHandle from each load and release it when the content is not needed anymore; for InstantiateAsync I use ReleaseInstance. A bundle unloads only when nothing uses it, so I keep track of the handles.
+A: I keep the load or instance handle and release it with the matching Addressables release method when the content is not needed anymore. A bundle unloads only when nothing uses it, so I keep track of the handles.
 
 Q: What is the difference between Cannot Change Post Release and Can Change Post Release?
 A: Cannot Change for content that should stay the same - if an asset changes, it can move into a new small update group, and the old bundles stay valid. Can Change - a changed asset can make its whole bundle rebuild, and how much players download depends on how the group is packed.
@@ -1415,7 +1487,7 @@ A: The scene reference can pull the asset into the build through the scene, and 
 --- PROFILER AND FRAME DEBUGGER (often a live test) ---
 
 Q: Here is a Profiler - where is the bottleneck?
-A: I don't decide the bottleneck from one marker. I look at the Main Thread and the Render Thread together, at the wait markers, and at the GPU timing and the frame time. A marker like Gfx.WaitForPresentOnGfxThread can mean the CPU waits for the GPU, but it can also be VSync, so I check it together with the rest. Then I find the biggest marker. For example: "The main thread is slow, Canvas.SendWillRenderCanvases takes the most time, so I would look at what is rebuilding and move the part that changes often to its own Canvas."
+A: I don't decide the bottleneck from one marker. I look at the Main Thread and the Render Thread together, at the wait markers, and at the GPU timing and the frame time. A wait for the GPU can mean the GPU is slow, but it can also be VSync, so I check it together with the rest. Then I find what takes the most time. For example: "The main thread is slow, UI rebuilds take the most time, so I would look at what is rebuilding and move the part that changes often to its own Canvas."
 FOLLOW-UP: What if the GPU is the bottleneck? -> I look for heavy shaders, overdraw, or too many particles. I may use fewer particles, smaller textures, or make the shader simpler.
 
 Q: A screen looked fine in the Editor but is blurry on the phone. Why?
@@ -1428,7 +1500,7 @@ Q: What do you check first when a sprite looks wrong in the game?
 A: I go step by step. Source art first. Then the import settings: slicing, pivot, PPU, compression. Then the prefab, animation, shader, and the state while the game runs. Turning systems off one by one shows which one is the problem.
 
 Q: How do you find where an error comes from in a build?
-A: I check the Player.log and stack traces. On Android I use logcat, and on iOS I use the Xcode console. The Editor Console is not the main place to inspect logs from a device build.
+A: I check the device logs and stack traces with the Android and iOS developer tools. The Editor Console is not the main place to inspect logs from a device build.
 
 --- PREFABS AND VARIANTS FOR LIVE EVENTS ---
 
@@ -1446,7 +1518,7 @@ A: Unity creates a new GUID for the asset, which means every link breaks. Sprite
 
 Q: When do you use object pooling?
 A: For things I create all the time: coins, bullets, reward effects, items in big lists. Reusing them avoids lag spikes from creating and destroying objects. A menu that shows up once or twice doesn't need a pool.
-FOLLOW-UP: How do you reset a pooled object when it's reused? -> I reset its state myself, and I unsubscribe from events when it goes back to the pool. OnEnable and OnDisable are good places for that cleanup, but they don't reset the object by themselves.
+FOLLOW-UP: How do you reset a pooled object when it's reused? -> I reset its state myself, and I unsubscribe from events when it goes back to the pool. The moments when the object is turned on and off are good places for that cleanup, but they don't reset the object by themselves.
 
 Q: What is the difference between Destroy and SetActive(false)?
 A: SetActive(false) only hides the object - it stays in memory, ready to use again. Destroy removes the GameObject from the scene, but the assets it used can stay loaded. Objects that come back often I hide or pool instead of destroying.
@@ -1484,7 +1556,7 @@ Q: How do you validate content before a build?
 A: I would write an editor check that runs before the build and looks for missing links, wrong import settings, too many materials per object. If something is wrong, it reports a clear list of problems, and for critical rules the build can fail, so they get fixed before release.
 
 Q: Why do files written from outside Unity not appear?
-A: With Auto Refresh on, Unity normally finds external changes by itself, for example when the Editor gets focus again. If my tool writes files and I need them imported right away, I don't rely on that - I call AssetDatabase.Refresh or ImportAsset. Otherwise Unity may not import the new files until the next refresh.
+A: With Auto Refresh on, Unity normally finds external changes by itself, for example when the Editor gets focus again. If my tool writes files and I need them imported right away, I don't rely on that - I tell Unity from code to refresh or import them. Otherwise Unity may not import the new files until the next refresh.
 
 Q: What do you do when a teammate's prefab change breaks your screen?
 A: I find the exact change that broke it, then talk to them. We agree on how to fix it together - I don't silently overwrite their change.
