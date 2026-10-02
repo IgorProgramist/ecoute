@@ -54,7 +54,7 @@ class IdleGate:
     def _reset_history(self):
         if self.transcriber is not None:
             self.transcriber.transcript_data["Speaker"].clear()
-            self.transcriber.audio_sources["Speaker"]["phrase_text"] = ""
+            self.transcriber.clear_speaker_buffer()
             self.transcriber.audio_sources["Speaker"]["new_phrase"] = True
         if self.provider is not None:
             self.provider.last_question = None
@@ -150,8 +150,6 @@ def main():
     user_audio_recorder = DefaultMicRecorder(calibrate=False, probe=False)
     speaker_audio_recorder = DefaultSpeakerRecorder()
 
-    speaker_audio_recorder.record_into_queue(speaker_queue)
-
     model = TranscriberModels.get_model('--api' in sys.argv)
 
     transcriber = AudioTranscriber(user_audio_recorder.source, speaker_audio_recorder.source, model)
@@ -159,7 +157,10 @@ def main():
     transcribe.daemon = True
     transcribe.start()
 
-    suggestion_provider = SuggestionProvider(load_api_key())
+    # слухання стартує ПІСЛЯ транскрайбера — перше питання не втрачається
+    speaker_audio_recorder.record_into_queue(speaker_queue)
+
+    suggestion_provider = SuggestionProvider(load_api_key(), transcriber=transcriber)
 
     display = Teleprompter(root, height=160)
     display.pack(fill="both", expand=True)

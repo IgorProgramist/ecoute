@@ -16,6 +16,8 @@ MAX_PHRASES = 10
 class AudioTranscriber:
     def __init__(self, mic_source, speaker_source, model):
         self.transcript_data = {"You": [], "Speaker": []}
+        self.speaker_buffer = ""   # монотонний буфер питання
+        self.buffer_epoch = 0      # номер відстрілу
         self.transcript_changed_event = threading.Event()
         self.audio_model = model
         self.audio_sources = {
@@ -86,10 +88,12 @@ class AudioTranscriber:
             if speaker_data:
                 source_info = self.audio_sources["Speaker"]
                 try:
+                    print(f"[TRANS] speaker: {len(speaker_data)} chunks, {len(source_info['last_sample'])} bytes")
                     fd, path = tempfile.mkstemp(suffix=".wav")
                     os.close(fd)
                     source_info["process_data_func"](source_info["last_sample"], path)
                     text = self.audio_model.get_transcription(path)
+                    print(f"[TRANS] result: {text[:80]!r}")
                     if text != '' and text.lower() != 'you':
                         latest_time = max(time for _, time in speaker_data)
                         pending_transcriptions.append(("Speaker", text, latest_time))
@@ -115,8 +119,14 @@ class AudioTranscriber:
         else:
             source_info["new_phrase"] = False
 
+        # зберігаємо ts і довжину ПОПЕРЕДНЬОГО шматка (для розрахунку
+        # реальної паузи в аудіо між шматками)
+        source_info["prev_spoken"] = source_info["last_spoken"]
+        source_info["prev_data_len"] = source_info.get("last_data_len", 0)
+
         source_info["last_sample"] += data
-        source_info["last_spoken"] = time_spoken 
+        source_info["last_spoken"] = time_spoken
+        source_info["last_data_len"] = len(data)
 
     def process_mic_data(self, data, temp_file_name):
         audio_data = sr.AudioData(data, self.audio_sources["You"]["sample_rate"], self.audio_sources["You"]["sample_width"])
@@ -151,36 +161,32 @@ class AudioTranscriber:
         source_info = self.audio_sources[who_spoke]
         transcript = self.transcript_data[who_spoke]
 
+        if who_spoke == "Speaker":
+            # ОДИН монотонний буфер: питання НЕ розбивається на під-питання.
+            # Все почуте з минулого відстрілу дописується сюди.
+            self.speaker_buffer = (self.speaker_buffer + " " + text).strip()
+            if len(self.speaker_buffer) > 4000:
+                self.speaker_buffer = self.speaker_buffer[-2000:]
+
         if source_info["new_phrase"] or len(transcript) == 0:
-            # нова фраза — накопичення тексту починається заново
-            source_info["phrase_text"] = text
-            source_info["phrase_epoch"] = source_info["phrase_epoch"] + 1
             if len(transcript) > MAX_PHRASES:
                 transcript.pop(-1)
             transcript.insert(0, (f"{who_spoke}: [{text}]\n\n", time_spoken))
         else:
-            prev = source_info["phrase_text"].strip()
-            if prev and prev[-1] in ("?", ".", "!"):
-                # попереднє речення вже ЗАВЕРШЕНЕ (пунктуація в кінці) —
-                # новий шматок це НОВЕ питання, не продовження
-                source_info["phrase_text"] = text
-                source_info["phrase_epoch"] = source_info["phrase_epoch"] + 1
-                if len(transcript) > MAX_PHRASES:
-                    transcript.pop(-1)
-                transcript.insert(0, (f"{who_spoke}: [{text}]\n\n", time_spoken))
-            else:
-                # продовження фрази: довге питання приходить у кількох шматках —
-                # ДОПИСУЄМО, а не перезаписуємо
-                source_info["phrase_text"] = (prev + " " + text).strip()
-                transcript[0] = (f"{who_spoke}: [{source_info['phrase_text']}]\n\n", time_spoken)
+            transcript[0] = (f"{who_spoke}: [{text}]\n\n", time_spoken)
+
+    def clear_speaker_buffer(self):
+        """Викликається після відстрілу відповіді: далі буфер з чистого."""
+        self.speaker_buffer = ""
+        self.buffer_epoch += 1
 
     def get_current_speaker_phrase(self):
-        """Повний накопичений текст поточної фрази спікера (питання)."""
-        return self.audio_sources["Speaker"]["phrase_text"].strip()
+        """Повний накопичений текст питання (все з минулого відстрілу)."""
+        return self.speaker_buffer.strip()
 
     def get_speaker_phrase_epoch(self):
-        """Номер генерації фрази: змінюється щоразу, коли починається нове питання."""
-        return self.audio_sources["Speaker"]["phrase_epoch"]
+        """Номер відстрілу: змінюється щоразу, коли буфер очищено."""
+        return self.buffer_epoch
 
     def get_speaker_last_ts(self):
         """Час останнього АУДІО-шматка спікера — сигнал 'інтерв'юер ще говорить'."""
@@ -213,5 +219,4 @@ class AudioTranscriber:
         self.audio_sources["You"]["new_phrase"] = True
         self.audio_sources["Speaker"]["new_phrase"] = True
 
-        self.audio_sources["You"]["phrase_text"] = ""
-        self.audio_sources["Speaker"]["phrase_text"] = ""
+        self.speaker_buffer = ""

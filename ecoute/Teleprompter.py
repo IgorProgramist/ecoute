@@ -11,6 +11,8 @@ LEFT_MARGIN = 80
 SCROLL_SPEED_PX_S = 170   # швидкість читання, пікселів/секунду
 ENTRY_SPEED_PX_S = 500    # швидкість заїзду тексту справа до точки читання
 START_HOLD_S = 0.6        # скільки стрічка стоїть на точці читання перед рухом
+CHUNK_WORDS = 120         # скільки слів стрічки вантажиться за раз (довгі тексти
+                          # цілим лейблом ламають tkinter)
 
 
 class Teleprompter(tk.Canvas):
@@ -28,6 +30,8 @@ class Teleprompter(tk.Canvas):
         self._font = tkfont.Font(font=self._label.cget("font"))
         self._win = None
         self._current_text = None
+        self._full_words = []
+        self._chunk_start = 0
         self._x = float(LEFT_MARGIN)
         self._scrolling = False
         self._paused = False
@@ -93,13 +97,23 @@ class Teleprompter(tk.Canvas):
         self._cancel()
         self._paused = False
         self._current_text = text
-        self._label.config(text=text)
-        print(f"[PROMPT] START ribbon: {text[:70]}")
+        self._full_words = text.split()
+        self._chunk_start = 0
+        self._load_chunk()
+
+    def _load_chunk(self):
+        """Вантажить наступний кусок тексту (CHUNK_WORDS слів)."""
+        self._cancel()
+        chunk = self._full_words[self._chunk_start:self._chunk_start + CHUNK_WORDS]
+        if not chunk:
+            self.hide()
+            return
+        chunk_text = " ".join(chunk)
+        self._label.config(text=chunk_text)
         h = self._safe_height()
         if self._win is None:
             self._win = self.create_window(0, h // 2, window=self._label, anchor="w")
-        # старт: текст за правим краєм вікна і ШВИДКО заїжджає до точки
-        # читання (лівий край), потім сідає на швидкість читання
+        # старт: текст за правим краєм вікна і ШВИДКО заїжджає до точки читання
         self._x = float(self.winfo_width() or 1000)
         self._scrolling = True
         self._last_t = time.monotonic()
@@ -114,6 +128,8 @@ class Teleprompter(tk.Canvas):
             self.start(text)
             return
         self._current_text = text
+        self._full_words = text.split()
+        self._chunk_start = 0
         self._label.config(text=text)
 
     def hide(self):
@@ -121,6 +137,8 @@ class Teleprompter(tk.Canvas):
         self._cancel()
         self._paused = False
         self._current_text = None
+        self._full_words = []
+        self._chunk_start = 0
         if self._win:
             self.coords(self._win, self.winfo_width() or 1000, self._safe_height() // 2)
         self._label.config(text="")
@@ -189,9 +207,13 @@ class Teleprompter(tk.Canvas):
             self._x -= SCROLL_SPEED_PX_S * dt
 
         text_w = self._font.measure(self._label.cget("text"))
-        # коли текст повністю виїхав за лівий край — ховаємо стрічку
+        # коли текст повністю виїхав за лівий край — наступний кусок або ховаємось
         if self._x + text_w < 0:
-            self.hide()
+            self._chunk_start += CHUNK_WORDS
+            if self._chunk_start < len(self._full_words):
+                self._load_chunk()
+            else:
+                self.hide()
             return
 
         self.coords(self._win, self._x, self._safe_height() // 2)

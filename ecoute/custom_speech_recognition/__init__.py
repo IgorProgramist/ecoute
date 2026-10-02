@@ -177,12 +177,14 @@ class Microphone(AudioSource):
         assert self.stream is None, "This audio source is already inside a context manager"
         self.audio = self.pyaudio_module.PyAudio()
 
-        # callback-режим: стрім ПХАЄ дані в чергу сам — read() ніколи не
-        # блокується навіки (BT-loopback вмирає тихо, блокуючі read()
-        # вмикали намертво весь конвеєр)
+        # callback-режим: ЄДИНИЙ стабільний спосіб читати loopback
+        # (блокуючі read() у pyaudiowpatch висять; callback віддає дані,
+        # поки на виході активна сесія відтворення)
         audio_q = queue.Queue()
+        cb_counter = [0]
 
         def _cb(in_data, frame_count, time_info, status):
+            cb_counter[0] += 1
             audio_q.put(bytes(in_data))
             return (None, self.pyaudio_module.paContinue)
 
@@ -205,6 +207,7 @@ class Microphone(AudioSource):
                     stream_callback=_cb,
                 )
             self.stream = Microphone.MicrophoneStream(stream, audio_q)
+            self._cb_counter = cb_counter
         except Exception:
             self.audio.terminate()
         return self
@@ -220,17 +223,13 @@ class Microphone(AudioSource):
     class MicrophoneStream(object):
         def __init__(self, pyaudio_stream, audio_q=None):
             self.pyaudio_stream = pyaudio_stream
-            self.audio_q = audio_q  # callback-черга; None = старий блокуючий режим
+            self.audio_q = audio_q  # callback-черга
 
         def read(self, size, exception_on_overflow=False):
-            if self.audio_q is not None:
-                # беремо з черги з таймаутом: немає даних -> порожній буфер
-                # (семантика "кінець потоку"), конвеєр залишається живим
-                try:
-                    return self.audio_q.get(timeout=2.0)
-                except Exception:
-                    return b""
-            return self.pyaudio_stream.read(size, exception_on_overflow=False)
+            try:
+                return self.audio_q.get(timeout=2.0)
+            except Exception:
+                return b""
 
         def close(self):
             try:
@@ -597,7 +596,10 @@ class Recognizer(AudioSource):
 
         def threaded_listen():
             with source as s:
+                attempts = 0
+                last_beat = 0.0
                 while running[0]:
+                    attempts += 1
                     try:  # listen for 1 second, then check again if the stop function has been called
                         audio = self.listen(s, 1, phrase_time_limit)
                     except WaitTimeoutError:  # listening timed out, just try again
@@ -610,7 +612,14 @@ class Recognizer(AudioSource):
                         print(f"[WARN] listen error: {e!r}; retrying...")
                         time.sleep(0.5)
                     else:
-                        if running[0]: callback(self, audio)
+                        raw_len = len(audio.get_raw_data())
+                        now = time.time()
+                        cb_n = s._cb_counter[0] if getattr(s, "_cb_counter", None) else -1
+                        qsize = s.stream.audio_q.qsize() if s.stream and s.stream.audio_q else -1
+                        if now - last_beat > 5.0:
+                            last_beat = now
+                            print(f"[LISTEN] alive, attempts={attempts}, cb={cb_n}, qsize={qsize}, last chunk {raw_len} bytes")
+                        if raw_len > 0 and running[0]: callback(self, audio)
 
         def stopper(wait_for_stop=True):
             running[0] = False

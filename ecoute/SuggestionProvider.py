@@ -64,7 +64,8 @@ def load_prepared_answers():
 
 
 class SuggestionProvider:
-    def __init__(self, api_key):
+    def __init__(self, api_key, transcriber=None):
+        self.transcriber = transcriber
         self.enabled = bool(api_key)
         self.last_question = None
         self.last_ts = None
@@ -202,7 +203,10 @@ class SuggestionProvider:
             if new_n - old_n < REFIRE_MIN_NEW_WORDS:
                 return
         self._last_fired_text = question
-        print(f"[MATCH] question complete: {question[:90]}")
+        print(f"[MATCH] question complete: {question[:250]}")
+        # буфер питання: після відстрілу далі з чистого
+        if self.transcriber is not None:
+            self.transcriber.clear_speaker_buffer()
 
         prepared = self._best_prepared(question)
         if prepared is not None:

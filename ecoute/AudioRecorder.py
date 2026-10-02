@@ -202,10 +202,6 @@ class DefaultSpeakerRecorder(BaseRecorder):
                                chunk_size=1024,
                                channels=default_speakers["maxInputChannels"])
         super().__init__(source=source)
-        # тестовий тон: BT-loopback віддає дані тільки коли щось грає,
-        # тому калібрування спікера грає тон самостійно
-        self.adjust_for_noise(
-            "Default Speaker",
-            "Calibrating with built-in test tone...",
-            test_sound=_make_tone_wav(),
-        )
+        # БЕЗ калібрування: loopback спікера тихий при старті — калібрування
+        # завжди упирається в таймаут і ламає фідер. Дефолтний поріг ок.
+        print("[INFO] speaker calibration skipped (silent loopback)")
