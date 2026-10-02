@@ -158,7 +158,8 @@ def main():
     transcribe.start()
 
     # слухання стартує ПІСЛЯ транскрайбера — перше питання не втрачається
-    start_keepalive()
+    if '--keepalive' in sys.argv:
+        start_keepalive()
     speaker_audio_recorder.record_into_queue(speaker_queue)
 
     suggestion_provider = SuggestionProvider(load_api_key(), transcriber=transcriber)

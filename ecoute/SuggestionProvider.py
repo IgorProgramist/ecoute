@@ -212,6 +212,7 @@ class SuggestionProvider:
         if prepared is not None:
             if prepared[1] == self.last_shown_answer:
                 return  # та сама відповідь вже показувалась — не рестартуємо стрічку
+            print(f"[MATCH] fired prepared answer: {prepared[1][:80]}")
             self._set_text(display, prepared[1], restart=True)
             return
 

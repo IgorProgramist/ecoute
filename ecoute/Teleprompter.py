@@ -110,6 +110,7 @@ class Teleprompter(tk.Canvas):
             return
         chunk_text = " ".join(chunk)
         self._label.config(text=chunk_text)
+        print(f"[PROMPT] START ribbon: {chunk_text[:80]}")
         h = self._safe_height()
         if self._win is None:
             self._win = self.create_window(0, h // 2, window=self._label, anchor="w")
