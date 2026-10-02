@@ -8,7 +8,7 @@ import customtkinter as ctk
 
 import config
 import AudioRecorder
-from AudioRecorder import DefaultMicRecorder, DefaultSpeakerRecorder
+from AudioRecorder import DefaultMicRecorder, DefaultSpeakerRecorder, start_keepalive
 from AudioTranscriber import AudioTranscriber
 import TranscriberModels
 from Teleprompter import Teleprompter
@@ -158,6 +158,7 @@ def main():
     transcribe.start()
 
     # слухання стартує ПІСЛЯ транскрайбера — перше питання не втрачається
+    start_keepalive()
     speaker_audio_recorder.record_into_queue(speaker_queue)
 
     suggestion_provider = SuggestionProvider(load_api_key(), transcriber=transcriber)

@@ -189,25 +189,35 @@ class Microphone(AudioSource):
             return (None, self.pyaudio_module.paContinue)
 
         try:
-            if self.speaker:
-                p = self.audio
-                stream = p.open(
-                    input_device_index=self.device_index,
-                    channels=self.channels,
-                    format=self.format,
-                    rate=self.SAMPLE_RATE,
-                    frames_per_buffer=self.CHUNK,
-                    input=True,
-                    stream_callback=_cb,
-                )
+            last_err = None
+            for attempt in range(3):
+                try:
+                    if self.speaker:
+                        p = self.audio
+                        stream = p.open(
+                            input_device_index=self.device_index,
+                            channels=self.channels,
+                            format=self.format,
+                            rate=self.SAMPLE_RATE,
+                            frames_per_buffer=self.CHUNK,
+                            input=True,
+                            stream_callback=_cb,
+                        )
+                    else:
+                        stream = self.audio.open(
+                            input_device_index=self.device_index, channels=1, format=self.format,
+                            rate=self.SAMPLE_RATE, frames_per_buffer=self.CHUNK, input=True,
+                            stream_callback=_cb,
+                        )
+                    self.stream = Microphone.MicrophoneStream(stream, audio_q)
+                    self._cb_counter = cb_counter
+                    break
+                except Exception as e:
+                    last_err = e
+                    print(f"[WARN] audio open attempt {attempt + 1} failed: {e!r}")
+                    time.sleep(1.0)
             else:
-                stream = self.audio.open(
-                    input_device_index=self.device_index, channels=1, format=self.format,
-                    rate=self.SAMPLE_RATE, frames_per_buffer=self.CHUNK, input=True,
-                    stream_callback=_cb,
-                )
-            self.stream = Microphone.MicrophoneStream(stream, audio_q)
-            self._cb_counter = cb_counter
+                print(f"[ERROR] audio open failed after retries: {last_err!r}")
         except Exception:
             self.audio.terminate()
         return self
@@ -609,8 +619,22 @@ class Recognizer(AudioSource):
                         print("[WARN] listen: MemoryError, retrying...")
                         time.sleep(0.5)
                     except Exception as e:
-                        print(f"[WARN] listen error: {e!r}; retrying...")
-                        time.sleep(0.5)
+                        print(f"[WARN] listen error: {e!r}; restarting audio stream...")
+                        try:
+                            s.__exit__(None, None, None)
+                        except Exception:
+                            pass
+                        time.sleep(1.0)
+                        for attempt in range(3):
+                            if not running[0]:
+                                return
+                            try:
+                                s.__enter__()
+                                print("[INFO] audio stream restarted OK")
+                                break
+                            except Exception as e2:
+                                print(f"[WARN] stream reopen attempt {attempt + 1} failed: {e2!r}")
+                                time.sleep(2.0)
                     else:
                         raw_len = len(audio.get_raw_data())
                         now = time.time()

@@ -212,7 +212,7 @@ class SuggestionProvider:
         if prepared is not None:
             if prepared[1] == self.last_shown_answer:
                 return  # та сама відповідь вже показувалась — не рестартуємо стрічку
-            self._set_text(display, prepared[1])
+            self._set_text(display, prepared[1], restart=True)
             return
 
         if not self.enabled:
@@ -271,6 +271,7 @@ class SuggestionProvider:
                 acc = ""
                 got_first = False
                 last_push = 0.0
+                first_push_done = [False]
                 for chunk in stream:
                     now = time.time()
                     if not got_first and now - t0 > 10:
@@ -286,7 +287,10 @@ class SuggestionProvider:
                         acc += piece
                         if now - last_push >= 0.25:
                             last_push = now
-                            self._set_text(display, acc.replace("*", ""))
+                            # перший пуш = нова відповідь -> рестарт стрічки
+                            r = not first_push_done[0]
+                            first_push_done[0] = True
+                            self._set_text(display, acc.replace("*", ""), restart=r)
                 if acc.strip():
                     box["a"] = acc.strip()
             except Exception as e:
@@ -363,14 +367,15 @@ class SuggestionProvider:
         finally:
             self.busy = False
 
-        self._set_text(display, answer)
+        self._set_text(display, answer, restart=True)
 
-    def _set_text(self, display, text):
+    def _set_text(self, display, text, restart=False):
         self.last_shown_answer = text
         text = text.replace("\n", "   ")
         try:
-            # update_text: коли стрічка вже їде — текст оновлюється на лету
-            # (стрімінг), коли стрічка пуста — стартує як звичайно
-            display.after(0, display.update_text, text)
+            # restart=True (нова відповідь) = рестарт стрічки зі свіжого заїзду;
+            # стрімінг-пуши того ж розрахунку = оновлення тексту на лету
+            fn = display.start if restart else display.update_text
+            display.after(0, fn, text)
         except Exception:
             pass

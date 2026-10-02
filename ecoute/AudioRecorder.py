@@ -27,6 +27,36 @@ def _make_tone_wav(seconds=1.6, freq=440):
     return path
 
 
+def start_keepalive():
+    """Тихий keepalive: безперервно грає НУЛЬОВИЙ (тихий) буфер на дефолтний
+    вихід. WASAPI-сесія відтворення ніколи не «спить», тому loopback-захоплення
+    живе безперервно і перші слова питань не зжираються активацією."""
+    import threading
+
+    def _run():
+        try:
+            p = pyaudio.PyAudio()
+            out_i = p.get_host_api_info_by_type(pyaudio.paWASAPI)["defaultOutputDevice"]
+            dev = p.get_device_info_by_index(out_i)
+            rate = int(dev["defaultSampleRate"])
+            ch = max(int(dev.get("maxOutputChannels", 2)), 2) if dev.get("maxOutputChannels", 2) else 2
+            ch = 2
+            st = p.open(format=pyaudio.paInt16, channels=ch, rate=rate,
+                        output=True, frames_per_buffer=1024)
+            zeros = b"\x00\x00" * 1024 * ch
+            while True:
+                try:
+                    st.write(zeros)
+                except Exception:
+                    time.sleep(0.05)
+        except Exception as e:
+            print(f"[WARN] keepalive failed: {e!r}")
+
+    t = threading.Thread(target=_run, daemon=True)
+    t.start()
+    print("[INFO] keepalive armed (silent zero buffer, endpoint always active)")
+
+
 class BaseRecorder:
     def __init__(self, source):
         self.recorder = sr.Recognizer()
