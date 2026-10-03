@@ -73,6 +73,39 @@ def test_question_is_not_finished_while_audio_is_still_being_processed():
     assert datetime.utcnow() - tr.get_speaker_last_ts() < timedelta(seconds=1)
 
 
+def test_audio_taken_from_the_queue_is_transcribed_before_a_new_phrase_resets_it():
+    """Recorded: "Can you walk me through how you" - the rest of the question was
+    lost. Two chunks left the queue in one pass; the second (a late blip, more
+    than PHRASE_TIMEOUT after the first) reset the sample and erased the first
+    before whisper ever saw it."""
+    import queue
+    import threading
+    import time
+    import wave
+
+    class _Model:
+        def __init__(self):
+            self.seen = []
+
+        def get_transcription(self, path):
+            with wave.open(path, "rb") as w:
+                self.seen.append(w.getnframes())
+            return "text"
+
+    model = _Model()
+    tr = AudioTranscriber(_Src(), _Src(), model)
+    t0 = datetime.utcnow()
+    spk, mic = queue.Queue(), queue.Queue()
+    spk.put((b"\0\0" * 100, t0))                               # start of the question
+    spk.put((b"\0\0" * 200, t0 + timedelta(seconds=1.5)))      # the rest of the question
+    spk.put((b"\0\0" * 10, t0 + timedelta(seconds=6)))         # a late blip = new phrase
+    threading.Thread(target=tr.transcribe_audio_queue, args=(spk, mic), daemon=True).start()
+    deadline = time.time() + 10
+    while len(model.seen) < 2 and time.time() < deadline:
+        time.sleep(0.05)
+    assert model.seen == [300, 10]     # whole question first, then the blip on its own
+
+
 def test_answered_question_does_not_leak_into_the_next():
     tr, t0 = _new()
     _feed(tr, t0, "What is a Prefab?")

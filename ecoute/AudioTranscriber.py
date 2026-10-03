@@ -27,6 +27,7 @@ class AudioTranscriber:
         self._drop_speaker_audio = False
         self._speaker_queue = None
         self._speaker_busy = False
+        self._held_speaker = None   # шматок, відкладений до наступного кола
         self.transcript_changed_event = threading.Event()
         self.audio_model = model
         self.audio_sources = {
@@ -73,7 +74,17 @@ class AudioTranscriber:
             speaker_data = []
             while True:
                 try:
-                    data, time_spoken = speaker_queue.get_nowait()
+                    if self._held_speaker is not None:
+                        (data, time_spoken), self._held_speaker = self._held_speaker, None
+                    else:
+                        data, time_spoken = speaker_queue.get_nowait()
+                    if speaker_data and self._starts_new_speaker_phrase(time_spoken):
+                        # цей шматок почав би нову фразу і СТЕР би аудіо, яке
+                        # щойно взяли з черги, але ще не розпізнали (так губився
+                        # кінець питання: "Can you walk me through how you").
+                        # Спершу розпізнаємо взяте, шматок лишаємо на наступне коло
+                        self._held_speaker = (data, time_spoken)
+                        break
                     self.update_last_sample_and_phrase_status("Speaker", data, time_spoken)
                     speaker_data.append((data, time_spoken))
                 except queue.Empty:
@@ -122,6 +133,11 @@ class AudioTranscriber:
 
             self._speaker_busy = False
             threading.Event().wait(0.1)
+
+    def _starts_new_speaker_phrase(self, time_spoken):
+        last = self.audio_sources["Speaker"]["last_spoken"]
+        return self._drop_speaker_audio or bool(
+            last and time_spoken - last > timedelta(seconds=PHRASE_TIMEOUT))
 
     def update_last_sample_and_phrase_status(self, who_spoke, data, time_spoken):
         source_info = self.audio_sources[who_spoke]
@@ -222,7 +238,7 @@ class AudioTranscriber:
         тож на довгому питанні "3с тиші" набігало під час самого розпізнавання
         і суфлер стріляв посеред питання."""
         q = self._speaker_queue
-        if self._speaker_busy or (q is not None and not q.empty()):
+        if self._speaker_busy or self._held_speaker is not None or (q is not None and not q.empty()):
             return datetime.utcnow()
         return self.audio_sources["Speaker"]["last_spoken"]
 

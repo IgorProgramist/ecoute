@@ -64,7 +64,42 @@ _FILLER = {
     "okay", "ok", "next", "question", "alright", "well", "let", "lets", "move", "now",
     "um", "uh", "yeah", "yes", "great", "thanks", "thank", "cool", "another", "just",
     "quick", "quickly", "actually", "basically", "know", "sure",
+    # прохання розповісти більше: саме по собі не тема
+    "more", "detail", "details", "detailed", "elaborate", "deeper", "bit", "little",
+    "go", "into", "give",
 }
+
+# репліки-підтвердження: інтерв'юер не питає, а реагує на відповідь
+_ACK = {
+    "good", "nice", "perfect", "fine", "see", "got", "understood", "interesting",
+    "make", "sense", "right", "thank", "clear", "awesome", "correct", "exactly",
+    "hmm", "mhm", "mm", "hm", "oh", "ah", "wow", "true", "agree", "agreed",
+    "mmhmm", "mhmm", "mmm", "uhhuh", "uh", "huh", "yep", "yup", "aha", "noted",
+}
+_MORE_RE = re.compile(
+    r"\b(more|detail|details|elaborate|deeper|example|examples|why|expand|go on|continue|"
+    r"go into|explain|how so|what else|anything else|specifically|such as)\b")
+
+
+_BACK_RE = re.compile(
+    r"^(?:(?:and|so|but|okay|ok)[\s,]+)*(?:(?:how|why|when|where)\s+)?"
+    r"(?:does|do|did|is|are|was|can|could|will|would|should)\s+"
+    r"(?:you\s+\w+\s+)?(?:it|they|them|that|this|one|those|these)\b")
+
+
+def _utterance_kind(text):
+    """'ack'  = "Okay, great, thank you" — нічого не показуємо;
+    'more' = "Tell me more" / "Why?" без власної теми — продовження попередньої відповіді;
+    'question' = усе інше."""
+    # "Does it reduce draw calls?", "When would you use one?": питання про ТЕ,
+    # про що щойно говорили. Без попередньої теми prepared-збіг тут хибний
+    # (після SRP Batcher показало "How do you reduce draw calls?")
+    if _BACK_RE.match(text.lower().strip()):
+        return "more"
+    topic = [w for w in _ordered_tokens(text) if w not in _ACK]
+    if _MORE_RE.search(text.lower()) and not [w for w in topic if not _MORE_RE.fullmatch(w)]:
+        return "more"
+    return "ack" if not topic else "question"
 
 
 def _ordered_tokens(text):
@@ -105,6 +140,14 @@ def _split_parts(text):
         if part:
             out.append(part)
     return out
+
+
+def _split_lead_in(text):
+    """"Let's talk about UI, what is a Canvas?" -> "what is a Canvas?"; "" якщо вступу немає."""
+    m = _PART_RE.search(text.lower())
+    if not m or m.start() == 0:
+        return ""
+    return re.sub(r"^[\s?,.;\-]+(?:and\s+|or\s+)?", "", text[m.start():], flags=re.I).strip()
 
 
 def _max_words(question):
@@ -260,7 +303,11 @@ class SuggestionProvider:
             # коротке prepared-питання має прозвучати ПОВНІСТЮ: "built-in render
             # pipeline" має 2 слова з 3 від "universal render pipeline", але це
             # інша тема (заміна головного слова = інше питання)
-            if ov and not (len(ptok) <= 3 and ov < len(ptok)):
+            # prepared-питання з ОДНИМ змістовим словом збігається, лише коли це
+            # слово названо першим: "component in Unity" -> Component, але
+            # "has exit time" -/-> "What would you do with more time?"
+            lone_tail = len(ptok) == 1 and len(qt) > 1 and ov and order[next(iter(qt & ptok))] != 0
+            if ov and not lone_tail and not (len(ptok) <= 3 and ov < len(ptok)):
                 recall, precision = ov / len(ptok), ov / len(qt)
                 f1 = 2 * precision * recall / (precision + recall)
             # майже дослівний повтор, стійкий до злитих/розбитих слів
@@ -339,8 +386,21 @@ class SuggestionProvider:
         if self.transcriber is not None:
             self.transcriber.clear_speaker_buffer()
 
+        kind = _utterance_kind(question)
+        if kind == "ack":
+            # "Okay, great, thank you": раніше це йшло в AI і збивало стрічку
+            print("[MATCH] acknowledgement ignored")
+            return
+        # що було сказано до цього: AI потрібне для "tell me more" / "why?"
+        context = (self._prev_fired_q, self.last_shown_answer)
         prev_q, self._prev_fired_q = self._prev_fired_q, question
-        prepared = self._best_prepared(question)
+        prepared = None if kind == "more" else self._best_prepared(question)
+        if prepared is None and kind == "question" and _question_parts(question) == 1:
+            # вступ перед питанням: "Let's talk about UI, what is a Canvas?" —
+            # слова вступу заважають збігу, тому пробуємо саме питання без нього
+            tail = _split_lead_in(question)
+            if tail:
+                prepared = self._best_prepared(tail)
         if prepared is not None and prepared[1] == self.last_shown_answer:
             same_q = difflib.SequenceMatcher(
                 None, _normalize(prev_q or ""), _normalize(question)).ratio() >= 0.85
@@ -358,7 +418,7 @@ class SuggestionProvider:
 
         # питання з кількох частин: готові відповіді на частини показуємо
         # одразу підряд, у AI йде лише те, на що готової немає
-        glued, rest = self._glue_prepared(question)
+        glued, rest = ("", []) if kind == "more" else self._glue_prepared(question)
         if glued:
             print(f"[MATCH] glued prepared answers; parts left for AI: {len(rest)}")
             print(f"[MATCH] fired prepared answer: {glued}")
@@ -375,7 +435,7 @@ class SuggestionProvider:
         # НЕ показуємо "generating answer..." — стрічка мовчить, поки
         # відповідь реально не готова (без миготіння)
         threading.Thread(target=self._fetch, args=(question, display, self._gen),
-                         kwargs={"prefix": glued, "only": rest}, daemon=True).start()
+                         kwargs={"prefix": glued, "only": rest, "context": context}, daemon=True).start()
 
     def _glue_prepared(self, question):
         """-> (готові відповіді на частини підряд, частини без готової відповіді)."""
@@ -388,6 +448,10 @@ class SuggestionProvider:
             # частини незрозуміло про що мова — таке вирішує AI з повним питанням
             refers_back = i > 0 and re.search(r"\b(it|its|they|them|both|one|each)\b", part.lower())
             hit = None if refers_back else self._best_prepared(part, part=True)
+            # "tell me more about the Animator, what parameters...": відповідь
+            # про Animator щойно була на стрічці — не показуємо її вдруге
+            if hit is not None and hit[1] in (self.last_shown_answer or ""):
+                hit = None
             if hit is None:
                 rest.append(part)
             elif hit[1] not in answers:
@@ -490,10 +554,19 @@ class SuggestionProvider:
             return None
         return box.get("a") or None
 
-    def _fetch(self, question, display, gen, prefix="", only=None):
+    def _fetch(self, question, display, gen, prefix="", only=None, context=None):
         """prefix = уже показані готові відповіді; only = частини питання,
-        на які ще треба відповісти (AI дописує їх після prefix)."""
+        на які ще треба відповісти (AI дописує їх після prefix);
+        context = (попереднє питання, попередня відповідь на стрічці)."""
         prefix = (prefix + " ") if prefix else ""
+        earlier = ""
+        if context and context[0] and context[1]:
+            earlier = (
+                "Earlier in this interview the interviewer asked: \"" + context[0] + "\"\n"
+                "and the candidate answered: \"" + context[1] + "\"\n"
+                "If the new question refers back to that (tell me more, in more detail, why, an example, "
+                "it, that), continue from there with NEW details and do not repeat what was already said. "
+                "Otherwise ignore it.\n\n")
         try:
             # контекст: схожі prepared-відповіді кандидата (уже завантажені
             # при старті — читання файлу не витрачає час під час інтерв'ю)
@@ -506,6 +579,8 @@ class SuggestionProvider:
                     f"{self.info_text}\n\n"
                 )
             max_words = _max_words(" ".join(only) if only else question)
+            if _utterance_kind(question) == "more":
+                max_words += 20   # "tell me more" чекає на розгорнуту відповідь
             if only:
                 # AI має бачити вже сказане: без цього він дописав "Yes, Bloom is a
                 # renderer feature" одразу після готової відповіді, де сказано навпаки
@@ -522,6 +597,7 @@ class SuggestionProvider:
                         f"{info_block}"
                         f"Candidate's prepared answers for similar questions:\n"
                         f"{examples_text}\n\n"
+                        f"{earlier}"
                         f"Interviewer's question: {question}"
                     ),
                 },
