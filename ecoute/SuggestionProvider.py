@@ -61,8 +61,9 @@ def load_prepared_answers():
     except FileNotFoundError:
         print(f"[INFO] No prepared answers file ({config.ANSWERS_FILE})")
         return pairs, ""
-    # INFO-блок: довідка про кандидата/Unity — використовується як контекст для AI
-    m = re.search(r"^INFO:\s*$(.*?)(?=^Q:|\Z)", content, flags=re.M | re.S)
+    # блок знань: ВСЕ до першого "Q: " (старий формат мав маркер "INFO:",
+    # новий — просто розділи знань на початку файлу)
+    m = re.search(r"\A(.*?)(?=^Q: )", content, flags=re.M | re.S)
     info_text = m.group(1).strip() if m else ""
     blocks = re.findall(r"Q:\s*(.*?)\nA:\s*(.*?)(?=\nQ:|\Z)", content, flags=re.S)
     for q, a in blocks:
