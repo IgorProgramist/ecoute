@@ -1,4 +1,4 @@
-﻿# QA_test — чекає прогону (питання: quastions_for_test.md)
+﻿# QA_test_new — чекає прогону (питання: test_questions.md)
 
 Format рядків прогону:
 ## QNNN - {питання} | HEARD: ... | ANSWER [prepared/ai/none]: ... | time: speak Xs, total Ys
