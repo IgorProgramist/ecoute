@@ -81,6 +81,22 @@ def _tokens(text):
     return set(_ordered_tokens(text))
 
 
+_PART_RE = re.compile(
+    r"(?:^|[?,.;\-]\s*(?:and\s+|or\s+)?)"
+    r"(?:what|how|why|when|which|where|who|can|could|does|do|did|is|are|should|would|will)\b")
+
+
+def _question_parts(text):
+    """Скільки окремих питань в одній репліці: "What is X, what is Y, and how...?" = 3."""
+    return max(1, len(_PART_RE.findall(text.lower().strip())))
+
+
+def _max_words(question):
+    """Ліміт слів AI-відповіді росте з питанням: 40 слів на три частини
+    обрізали відповідь до однієї-двох частин."""
+    return config.AI_MAX_WORDS + 20 * (min(_question_parts(question), 3) - 1)
+
+
 def _merge_pairs(words, vocab):
     """whisper пише "mip maps" / "sprite sheet", у файлі "Mipmap" / "spritesheet":
     сусідню пару зливаємо, якщо злите слово є серед слів prepared-питань."""
@@ -129,6 +145,7 @@ class SuggestionProvider:
         self._q_changed_at = 0.0
         self._fired_for_q = False
         self._last_fired_text = None
+        self._prev_fired_q = None
         self._last_epoch = None
         self._retried = False
         self.prepared, self.info_text = load_prepared_answers()
@@ -224,7 +241,10 @@ class SuggestionProvider:
         for qorig, aorig, qnorm, ptok, psq in self.prepared_norm:
             ov = len(qt & ptok)
             f1 = 0.0
-            if ov:
+            # коротке prepared-питання має прозвучати ПОВНІСТЮ: "built-in render
+            # pipeline" має 2 слова з 3 від "universal render pipeline", але це
+            # інша тема (заміна головного слова = інше питання)
+            if ov and not (len(ptok) <= 3 and ov < len(ptok)):
                 recall, precision = ov / len(ptok), ov / len(qt)
                 f1 = 2 * precision * recall / (precision + recall)
             # майже дослівний повтор, стійкий до злитих/розбитих слів
@@ -235,9 +255,14 @@ class SuggestionProvider:
             key = (round(score, 3), -first, ratio)
             if key > best_key:
                 best_key, best = key, (qorig, aorig)
-        if best_key[0] >= config.MATCH_THRESHOLD:
-            return best
-        return None
+        if best_key[0] < config.MATCH_THRESHOLD:
+            return None
+        # питання з 2-3 частин: одна prepared-відповідь закриває лише одну з них
+        # (Prefab + Variant + "коли" -> показано тільки Variant). Таке йде в AI,
+        # якщо тільки prepared-питання саме не є цим складним питанням
+        if best_key[0] < 0.9 and _question_parts(question) >= 2:
+            return None
+        return best
 
     def _similar_prepared(self, question, k=3):
         """ТОП-k найближчих prepared-відповідей — контекст для AI."""
@@ -293,10 +318,19 @@ class SuggestionProvider:
         if self.transcriber is not None:
             self.transcriber.clear_speaker_buffer()
 
+        prev_q, self._prev_fired_q = self._prev_fired_q, question
         prepared = self._best_prepared(question)
+        if prepared is not None and prepared[1] == self.last_shown_answer:
+            same_q = difflib.SequenceMatcher(
+                None, _normalize(prev_q or ""), _normalize(question)).ratio() >= 0.85
+            if same_q:
+                return  # те саме питання ще раз — не рестартуємо стрічку
+            # ІНШЕ питання влучило в щойно показану відповідь ("addressable
+            # screw" після "What are Addressables?") — це сусідня тема, а не
+            # повтор: раніше тут була тиша, тепер відповідає AI
+            print("[MATCH] same answer for a different question -> AI")
+            prepared = None
         if prepared is not None:
-            if prepared[1] == self.last_shown_answer:
-                return  # та сама відповідь вже показувалась — не рестартуємо стрічку
             print(f"[MATCH] fired prepared answer: {prepared[1]}")
             self._set_text(display, prepared[1], restart=True)
             return
@@ -418,7 +452,8 @@ class SuggestionProvider:
                     f"Candidate background info (facts you may use):\n"
                     f"{self.info_text}\n\n"
                 )
-            system = SYSTEM_PROMPT_TEMPLATE.format(max_words=config.AI_MAX_WORDS)
+            max_words = _max_words(question)
+            system = SYSTEM_PROMPT_TEMPLATE.format(max_words=max_words)
             info_block = self._relevant_info(question)
             messages = [
                 {"role": "system", "content": system},
@@ -464,12 +499,12 @@ class SuggestionProvider:
                     print("[AI] empty content (reasoning ate the token budget), skipping")
                     return
             answer = answer.replace("*", "")
-            if len(answer.split()) > config.AI_MAX_WORDS + 10:
+            if len(answer.split()) > max_words + 10:
                 # обрізаємо по ОСТАННЬОМУ ЗАВЕРШЕНОМУ реченню, не по слову
                 # (рубання по слову лишає "so it" замість відповіді)
                 out = ""
                 for part in re.split(r"(?<=[.!?]) +", answer):
-                    if len((out + " " + part).split()) > config.AI_MAX_WORDS + 10:
+                    if len((out + " " + part).split()) > max_words + 10:
                         break
                     out = (out + " " + part).strip()
                 if out:

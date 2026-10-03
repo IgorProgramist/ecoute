@@ -25,6 +25,8 @@ class AudioTranscriber:
         self._speaker_current = ""
         self._buffer_phrase_id = 0
         self._drop_speaker_audio = False
+        self._speaker_queue = None
+        self._speaker_busy = False
         self.transcript_changed_event = threading.Event()
         self.audio_model = model
         self.audio_sources = {
@@ -54,7 +56,8 @@ class AudioTranscriber:
 
     def transcribe_audio_queue(self, speaker_queue, mic_queue):
         import queue
-        
+
+        self._speaker_queue = speaker_queue
         while True:
             pending_transcriptions = []
             
@@ -93,6 +96,7 @@ class AudioTranscriber:
                     source_info["last_sample"] = bytes()
             
             if speaker_data:
+                self._speaker_busy = True
                 source_info = self.audio_sources["Speaker"]
                 try:
                     print(f"[TRANS] speaker: {len(speaker_data)} chunks, {len(source_info['last_sample'])} bytes")
@@ -115,7 +119,8 @@ class AudioTranscriber:
                     self.update_transcript(who_spoke, text, time_spoken)
                 
                 self.transcript_changed_event.set()
-            
+
+            self._speaker_busy = False
             threading.Event().wait(0.1)
 
     def update_last_sample_and_phrase_status(self, who_spoke, data, time_spoken):
@@ -211,7 +216,14 @@ class AudioTranscriber:
         return self.buffer_epoch
 
     def get_speaker_last_ts(self):
-        """Час останнього АУДІО-шматка спікера — сигнал 'інтерв'юер ще говорить'."""
+        """Час останнього АУДІО-шматка спікера — сигнал 'інтерв'юер ще говорить'.
+        Поки whisper розпізнає шматок або в черзі лежить нове аудіо, питання
+        НЕ завершене: last_spoken оновлюється лише коли шматок узято з черги,
+        тож на довгому питанні "3с тиші" набігало під час самого розпізнавання
+        і суфлер стріляв посеред питання."""
+        q = self._speaker_queue
+        if self._speaker_busy or (q is not None and not q.empty()):
+            return datetime.utcnow()
         return self.audio_sources["Speaker"]["last_spoken"]
 
     def get_transcript(self):

@@ -50,9 +50,60 @@ def test_finds_the_right_prepared_answer(sp, heard, want):
     "which tools do you use, and what do you check first?",
     "What does the SRP batcher do? Does it reduce draw calls? And how is it different from normal batching?",
     "What is your salary expectation?",
+    # one word swapped in a short question = another topic (was answered as URP)
+    "What is the built-in render pipeline?",
+    # 2-3 questions in one: a single prepared answer covered only one part
+    "What is a prefab? What is a prefab variant? And when would you use a variant instead of a new prefab?",
+    "What is an animator state, what is a transition, and why can a transition feel late?",
 ])
 def test_unsure_question_goes_to_ai(sp, heard):
     assert title(sp, heard) is None
+
+
+@pytest.mark.parametrize("heard, parts, words", [
+    ("What is a draw call?", 1, 40),
+    ("What is a prefab and why do we use it?", 1, 40),
+    ("What is post processing, and is it expensive on mobile?", 2, 60),
+    ("What is overdraw, what is fill rate, and how exactly do you reduce overdraw?", 3, 80),
+    ("What is transparency? What is alpha clipping? And does additive blending reduce overdraw?", 3, 80),
+    ("The game lags, where do you start, which tools do you use, what do you check, and how do you fix it?", 4, 80),
+])
+def test_ai_word_limit_grows_with_the_question(heard, parts, words):
+    assert SP._question_parts(heard) == parts
+    assert SP._max_words(heard) == words
+
+
+class _Display:
+    def __init__(self):
+        self.shown = []
+
+    def after(self, _ms, _fn, text):
+        self.shown.append(text)
+
+    start = update_text = None
+
+
+def _ask(sp, heard, display):
+    sp._last_fired_text = None
+    sp.maybe_update(heard, display)
+
+
+def test_same_answer_for_a_different_question_is_not_silent(sp, monkeypatch):
+    """Recorded: "What are addressables?" then "What is an addressable screw?"
+    (whisper for "Addressables Group") hit the answer just shown -> nothing at all."""
+    asked_ai = []
+    monkeypatch.setattr(sp, "enabled", True)
+    monkeypatch.setattr(sp, "_fetch", lambda q, d, g: asked_ai.append(q))
+    monkeypatch.setattr(SP.threading, "Thread", lambda target, args, daemon: type(
+        "T", (), {"start": lambda self: target(*args)})())
+    d = _Display()
+    _ask(sp, "What are addressables?", d)
+    assert len(d.shown) == 1 and not asked_ai
+    _ask(sp, "What are addressables?", d)          # the same question again
+    assert len(d.shown) == 1 and not asked_ai      # ribbon is not restarted
+    sp._gen += 1
+    _ask(sp, "What is an addressable screw?", d)   # a different question
+    assert asked_ai == ["What is an addressable screw?"]
 
 
 def test_every_prepared_question_finds_itself(sp):

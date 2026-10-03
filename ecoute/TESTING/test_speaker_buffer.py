@@ -57,6 +57,22 @@ def test_two_chunks_in_one_drain_still_start_a_new_phrase():
     assert tr.get_current_speaker_phrase() == "What is a Canvas? What is a Mask?"
 
 
+def test_question_is_not_finished_while_audio_is_still_being_processed():
+    """Recorded on long questions: whisper needs seconds for a 9 s phrase, new
+    chunks wait in the queue, and "3 s of silence" elapsed during transcription."""
+    import queue
+    tr, _ = _new()
+    old = datetime.utcnow() - timedelta(seconds=10)
+    tr.update_last_sample_and_phrase_status("Speaker", b"\0\0", old)
+    assert tr.get_speaker_last_ts() == old                   # idle: real silence
+    tr._speaker_busy = True                                   # whisper is working
+    assert datetime.utcnow() - tr.get_speaker_last_ts() < timedelta(seconds=1)
+    tr._speaker_busy = False
+    tr._speaker_queue = queue.Queue()
+    tr._speaker_queue.put((b"\0\0", datetime.utcnow()))      # audio not taken yet
+    assert datetime.utcnow() - tr.get_speaker_last_ts() < timedelta(seconds=1)
+
+
 def test_answered_question_does_not_leak_into_the_next():
     tr, t0 = _new()
     _feed(tr, t0, "What is a Prefab?")

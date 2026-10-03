@@ -106,7 +106,7 @@ def main():
                         None, cn, SP._normalize(r[1])).ratio())
                 v = judge(n, question, title, run, norm_titles)
                 cnt[v] += 1
-                if v == "WRONG" or (VERBOSE and v == "ai" and kind == "clean"):
+                if v == "WRONG" or (VERBOSE and v == "ai" and kind == "written"):
                     print("  run%d %-7s Q%03d %-5s %r -> %r" % (run, kind, n, v, text[:70], title))
             total[(run, kind)] = cnt
             print("run%d %-7s n=%d  ok=%d  ai=%d  WRONG=%d" % (run, kind, len(rows), cnt["ok"], cnt["ai"], cnt["WRONG"]))
