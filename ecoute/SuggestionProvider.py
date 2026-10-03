@@ -28,6 +28,8 @@ SYSTEM_PROMPT_TEMPLATE = (
     "fully answers ALL parts of the question. "
     "Use SIMPLE everyday words and short clear sentences — the candidate reads it aloud fast. "
     "Avoid difficult vocabulary and abbreviations you can't say. "
+    "The question comes from speech recognition and may contain misheard words — "
+    "answer about the closest real Unity term and never comment on the wording. "
     "Do not use lists, headings or markdown — plain sentences only. "
     "Output ONLY the answer text, nothing else."
 )
@@ -89,6 +91,20 @@ _PART_RE = re.compile(
 def _question_parts(text):
     """Скільки окремих питань в одній репліці: "What is X, what is Y, and how...?" = 3."""
     return max(1, len(_PART_RE.findall(text.lower().strip())))
+
+
+def _split_parts(text):
+    """"What is X, what is Y, and how...?" -> ["What is X", "what is Y", "how...?"]."""
+    starts = [m.start() for m in _PART_RE.finditer(text.lower())]
+    if len(starts) < 2:
+        return [text.strip()]
+    starts[0] = 0
+    out = []
+    for a, b in zip(starts, starts[1:] + [len(text)]):
+        part = re.sub(r"^[\s?,.;\-]+(?:and\s+|or\s+)?", "", text[a:b], flags=re.I).strip()
+        if part:
+            out.append(part)
+    return out
 
 
 def _max_words(question):
@@ -223,7 +239,7 @@ class SuggestionProvider:
                 out += text.strip() + "\n\n"
         return out
 
-    def _best_prepared(self, question):
+    def _best_prepared(self, question, part=False):
         """Рахунок = F1 по змістових словах: скільки слів prepared-питання
         прозвучало (recall) І яку частку почутого воно покриває (precision).
         Сам recall стріляв хибно: 3 спільні слова з 6 давали 0.5 навіть коли
@@ -237,7 +253,7 @@ class SuggestionProvider:
         order = {}
         for i, w in enumerate(heard):
             order.setdefault(w, i)
-        best_key, best = (0.0, 0.0, 0.0), None
+        best_key, best, best_ov = (0.0, 0.0, 0.0), None, 0
         for qorig, aorig, qnorm, ptok, psq in self.prepared_norm:
             ov = len(qt & ptok)
             f1 = 0.0
@@ -254,8 +270,13 @@ class SuggestionProvider:
             first = min((order[w] for w in qt & ptok), default=99)
             key = (round(score, 3), -first, ratio)
             if key > best_key:
-                best_key, best = key, (qorig, aorig)
+                best_key, best, best_ov = key, (qorig, aorig), ov
         if best_key[0] < config.MATCH_THRESHOLD:
+            return None
+        # частина складного питання: одного спільного слова мало, якщо частина
+        # не складається лише з нього ("what do you check first" -> "How did
+        # you check it?" - хибно; "what is overdraw" -> Overdraw - вірно)
+        if part and best_ov < 2 and len(qt) != 1 and best_key[2] < 0.9:
             return None
         # питання з 2-3 частин: одна prepared-відповідь закриває лише одну з них
         # (Prefab + Variant + "коли" -> показано тільки Variant). Таке йде в AI,
@@ -335,6 +356,16 @@ class SuggestionProvider:
             self._set_text(display, prepared[1], restart=True)
             return
 
+        # питання з кількох частин: готові відповіді на частини показуємо
+        # одразу підряд, у AI йде лише те, на що готової немає
+        glued, rest = self._glue_prepared(question)
+        if glued:
+            print(f"[MATCH] glued prepared answers; parts left for AI: {len(rest)}")
+            print(f"[MATCH] fired prepared answer: {glued}")
+            self._set_text(display, glued, restart=True)
+            if not rest:
+                return
+
         if not self.enabled:
             return  # збігу немає, AI вимкнений — нічого не показуємо
 
@@ -343,7 +374,25 @@ class SuggestionProvider:
         self._busy_gen = self._gen
         # НЕ показуємо "generating answer..." — стрічка мовчить, поки
         # відповідь реально не готова (без миготіння)
-        threading.Thread(target=self._fetch, args=(question, display, self._gen), daemon=True).start()
+        threading.Thread(target=self._fetch, args=(question, display, self._gen),
+                         kwargs={"prefix": glued, "only": rest}, daemon=True).start()
+
+    def _glue_prepared(self, question):
+        """-> (готові відповіді на частини підряд, частини без готової відповіді)."""
+        parts = _split_parts(question)
+        if len(parts) < 2:
+            return "", []
+        answers, rest = [], []
+        for i, part in enumerate(parts):
+            # "does IT reduce draw calls", "which ONE is cheaper": без першої
+            # частини незрозуміло про що мова — таке вирішує AI з повним питанням
+            refers_back = i > 0 and re.search(r"\b(it|its|they|them|both|one|each)\b", part.lower())
+            hit = None if refers_back else self._best_prepared(part, part=True)
+            if hit is None:
+                rest.append(part)
+            elif hit[1] not in answers:
+                answers.append(hit[1])
+        return " ".join(answers), (rest if answers else [])
 
     def _call_api(self, messages, max_tokens, timeout_s=25):
         """Жорсткий дедлайн: SDK timeout проксі ігнорує (keep-alive), тому
@@ -373,7 +422,7 @@ class SuggestionProvider:
             raise result["e"]
         return result["r"]
 
-    def _stream_answer(self, messages, display, gen):
+    def _stream_answer(self, messages, display, gen, prefix=""):
         """Стрімінг: відповідь показується у стрічці ПО МІРІ генерації.
         Повертає повний текст або None (якщо стрім не дав контенту)."""
         box = {}
@@ -414,7 +463,8 @@ class SuggestionProvider:
                             # перший пуш = нова відповідь -> рестарт стрічки
                             r = not first_push_done[0]
                             first_push_done[0] = True
-                            self._set_text(display, acc.replace("*", ""), restart=r)
+                            # prefix уже на стрічці: дописуємо, а не рестартуємо
+                            self._set_text(display, prefix + acc.replace("*", ""), restart=r and not prefix)
                 if acc.strip():
                     box["a"] = acc.strip()
             except Exception as e:
@@ -440,7 +490,10 @@ class SuggestionProvider:
             return None
         return box.get("a") or None
 
-    def _fetch(self, question, display, gen):
+    def _fetch(self, question, display, gen, prefix="", only=None):
+        """prefix = уже показані готові відповіді; only = частини питання,
+        на які ще треба відповісти (AI дописує їх після prefix)."""
+        prefix = (prefix + " ") if prefix else ""
         try:
             # контекст: схожі prepared-відповіді кандидата (уже завантажені
             # при старті — читання файлу не витрачає час під час інтерв'ю)
@@ -452,7 +505,10 @@ class SuggestionProvider:
                     f"Candidate background info (facts you may use):\n"
                     f"{self.info_text}\n\n"
                 )
-            max_words = _max_words(question)
+            max_words = _max_words(" ".join(only) if only else question)
+            if only:
+                question += ("\n\nThe candidate has ALREADY answered the other parts of this question. "
+                             "Answer ONLY this part, do not repeat the rest: " + " ".join(only))
             system = SYSTEM_PROMPT_TEMPLATE.format(max_words=max_words)
             info_block = self._relevant_info(question)
             messages = [
@@ -468,7 +524,7 @@ class SuggestionProvider:
                 },
             ]
             t0 = time.time()
-            answer = self._stream_answer(messages, display, gen)
+            answer = self._stream_answer(messages, display, gen, prefix)
             if not answer:
                 # стрім не дав контенту — повний запит як раніше
                 try:
@@ -524,7 +580,7 @@ class SuggestionProvider:
             print("[AI] stale answer dropped (new question arrived)")
             return
 
-        self._set_text(display, answer, restart=True)
+        self._set_text(display, prefix + answer, restart=not prefix)
 
     def _set_text(self, display, text, restart=False):
         self.last_shown_answer = text

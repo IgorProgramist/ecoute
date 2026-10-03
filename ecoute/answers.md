@@ -845,6 +845,12 @@ A: The Universal Render Pipeline is Unity's modern rendering solution that contr
 Q: What are Renderer Features?
 A: Renderer Features are built-in effects that can be added to URP to extend rendering. Common features include Render Objects, Decals, SSAO, and Screen Space Shadows. Custom features can be created for outlines, blur, or game-specific effects. Motion Blur and Bloom are post-processing effects, together with Vignette, Color Adjustments, Tonemapping, and Depth of Field.
 
+Q: What is post-processing?
+A: Post-processing is image effects applied to the whole picture after the camera renders the scene, like Bloom, Vignette, Color Adjustments, and Depth of Field. In URP it is set up with a Volume, not with Renderer Features. It is expensive on mobile because it processes the full screen, so it is used carefully and checked on a real phone.
+
+Q: Is Bloom a Renderer Feature?
+A: No, Bloom is a post-processing effect that is added through a Volume in URP. Renderer Features are a different thing, like Render Objects or Decals. Bloom makes bright parts glow and is expensive on mobile because it needs several full-screen passes.
+
 Q: What is the 2D Renderer?
 A: The 2D Renderer is a specialized renderer within URP designed for 2D games with features like 2D lights, shadows, and normal maps. It supports Sprite-Lit and Sprite-Unlit shaders for advanced 2D lighting.
 

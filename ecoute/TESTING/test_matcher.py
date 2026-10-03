@@ -93,9 +93,9 @@ def test_same_answer_for_a_different_question_is_not_silent(sp, monkeypatch):
     (whisper for "Addressables Group") hit the answer just shown -> nothing at all."""
     asked_ai = []
     monkeypatch.setattr(sp, "enabled", True)
-    monkeypatch.setattr(sp, "_fetch", lambda q, d, g: asked_ai.append(q))
-    monkeypatch.setattr(SP.threading, "Thread", lambda target, args, daemon: type(
-        "T", (), {"start": lambda self: target(*args)})())
+    monkeypatch.setattr(sp, "_fetch", lambda q, d, g, **kw: asked_ai.append(q))
+    monkeypatch.setattr(SP.threading, "Thread", lambda target, args, kwargs, daemon: type(
+        "T", (), {"start": lambda self: target(*args, **kwargs)})())
     d = _Display()
     _ask(sp, "What are addressables?", d)
     assert len(d.shown) == 1 and not asked_ai
@@ -104,6 +104,34 @@ def test_same_answer_for_a_different_question_is_not_silent(sp, monkeypatch):
     sp._gen += 1
     _ask(sp, "What is an addressable screw?", d)   # a different question
     assert asked_ai == ["What is an addressable screw?"]
+
+
+def _answer(sp, q):
+    return dict(sp.prepared)[q]
+
+
+def test_parts_with_prepared_answers_are_shown_together(sp):
+    glued, rest = sp._glue_prepared("What is static batching, what is dynamic batching?")
+    assert glued == _answer(sp, "What is Static Batching?") + " " + _answer(sp, "What is Dynamic Batching?")
+    assert rest == []
+
+
+def test_only_the_part_without_a_prepared_answer_goes_to_ai(sp, monkeypatch):
+    sent = []
+    monkeypatch.setattr(sp, "enabled", True)
+    monkeypatch.setattr(sp, "_fetch", lambda q, d, g, **kw: sent.append(kw))
+    monkeypatch.setattr(SP.threading, "Thread", lambda target, args, kwargs, daemon: type(
+        "T", (), {"start": lambda self: target(*args, **kwargs)})())
+    d = _Display()
+    sp._gen += 1
+    _ask(sp, "What is a pivot? What are pixels per unit? And why should all art use the same value?", d)
+    shown = _answer(sp, "What is a Pivot?") + " " + _answer(sp, "What are Pixels Per Unit?")
+    assert d.shown == [shown]                       # both prepared answers at once
+    assert sent == [{"prefix": shown, "only": ["why should all art use the same value?"]}]
+
+
+def test_one_question_is_never_split(sp):
+    assert sp._glue_prepared("What is the difference between a sprite renderer and a UI image?") == ("", [])
 
 
 def test_every_prepared_question_finds_itself(sp):

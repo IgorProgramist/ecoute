@@ -30,6 +30,7 @@ class Teleprompter(tk.Canvas):
         self._font = tkfont.Font(font=self._label.cget("font"))
         self._win = None
         self._current_text = None
+        self._done_text = None   # текст, який стрічка щойно довезла до кінця
         self._full_words = []
         self._chunk_start = 0
         self._x = float(LEFT_MARGIN)
@@ -126,18 +127,27 @@ class Teleprompter(tk.Canvas):
         if not text:
             return
         if self._win is None or not (self._scrolling or self._paused):
+            # стрічка вже доїхала, а AI дописав хвіст до ТОГО Ж тексту:
+            # показуємо лише нове, а не всю відповідь з початку
+            done = self._done_text
+            if done and text.startswith(done) and text[len(done):].strip():
+                text = text[len(done):]
             self.start(text)
             return
         self._current_text = text
         self._full_words = text.split()
-        self._chunk_start = 0
-        self._label.config(text=text)
+        # текст росте на льоту: лейбл лишається на ПОТОЧНОМУ шматку. Раніше тут
+        # ставився весь текст з нуля - на відповіді довшій за CHUNK_WORDS
+        # останні слова їхали двічі, а на другому шматку стрічка стрибала назад
+        chunk = self._full_words[self._chunk_start:self._chunk_start + CHUNK_WORDS]
+        self._label.config(text=" ".join(chunk))
 
     def hide(self):
         """Приховати стрічку (порожньо = вікно прозоре і невидиме)."""
         self._cancel()
         self._paused = False
         self._current_text = None
+        self._done_text = None
         self._full_words = []
         self._chunk_start = 0
         if self._win:
@@ -214,7 +224,9 @@ class Teleprompter(tk.Canvas):
             if self._chunk_start < len(self._full_words):
                 self._load_chunk()
             else:
+                done = self._current_text
                 self.hide()
+                self._done_text = done
             return
 
         self.coords(self._win, self._x, self._safe_height() // 2)

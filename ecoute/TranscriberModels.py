@@ -67,7 +67,8 @@ class FasterWhisperTranscriber:
             lang = config.TRANSCRIBE_LANGUAGE
             language = lang if lang in ("en", "uk") else None
             segments, _ = self.model.transcribe(wav_file_path, beam_size=config.BEAM_SIZE, language=language,
-                                                vad_filter=True, without_timestamps=True)
+                                                vad_filter=True, without_timestamps=True,
+                                                initial_prompt=getattr(config, "WHISPER_PROMPT", "") or None)
             full_text = " ".join(segment.text for segment in segments)
             return full_text.strip()
         except Exception as e:
