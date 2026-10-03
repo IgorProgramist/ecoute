@@ -507,8 +507,11 @@ class SuggestionProvider:
                 )
             max_words = _max_words(" ".join(only) if only else question)
             if only:
-                question += ("\n\nThe candidate has ALREADY answered the other parts of this question. "
-                             "Answer ONLY this part, do not repeat the rest: " + " ".join(only))
+                # AI має бачити вже сказане: без цього він дописав "Yes, Bloom is a
+                # renderer feature" одразу після готової відповіді, де сказано навпаки
+                question += ("\n\nThe candidate has ALREADY said this, word for word: \"" + prefix.strip() + "\"\n"
+                             "Treat it as true and never contradict it. Do not repeat it. "
+                             "Continue the answer with ONLY this remaining part: " + " ".join(only))
             system = SYSTEM_PROMPT_TEMPLATE.format(max_words=max_words)
             info_block = self._relevant_info(question)
             messages = [
