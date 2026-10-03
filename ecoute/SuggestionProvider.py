@@ -12,16 +12,11 @@ BASE_URL = "https://opencode.ai/zen/go/v1"
 
 QUESTION_SILENCE_S = 3.0    # аудіо-тиша 3с = питання завершене (дихання/задуми посеред питання коротші) (порог <2с стріляє в "сліпій зоні", доки записується наступний шматок)
 REFIRE_MIN_NEW_WORDS = 4   # повторний показ тільки якщо питання виросло на 4+ слів
-
-# загальні слова, що не мають матчингової ваги — інакше overlap роздувається
-# generic-словами і нерелевантні Q фолспозитивять ("salary" -> "mobile games")
-_STOPWORDS = {
-    "what", "when", "which", "would", "could", "should", "will", "your",
-    "about", "that", "this", "these", "those", "there", "have", "has", "had",
-    "does", "did", "was", "were", "been", "then", "than", "some", "many",
-    "much", "most", "very", "also", "just", "into", "over", "every",
-    "other", "each", "them", "they", "from",
-}
+# скільки чекати ПЕРШЕ слово стріму. Було 10с: повільний, але живий стрім
+# рубали, а запасний запит починав генерацію з нуля -> 10+25+25с тиші і [none]
+# (17 разів за 2 прогони). Виміряно: один запит = перше слово за 1.4с,
+# п'ять одночасних = 20-39с
+STREAM_FIRST_WORD_S = 25
 
 SYSTEM_PROMPT_TEMPLATE = (
     "You are helping a candidate during a live technical job interview (Unity / Technical Artist role). "
@@ -47,9 +42,57 @@ def load_api_key():
 
 
 def _normalize(text):
+    # whisper чує "mesh renderer", у файлі "MeshRenderer": ріжемо camelCase і
+    # межу літера-цифра, щоб обидва записи давали ті самі слова
+    text = re.sub(r"(?<=[a-z0-9])(?=[A-Z])", " ", text)
+    text = re.sub(r"(?<=[A-Za-z])(?=\d)", " ", text)
     text = text.lower()
     text = re.sub(r"[^\w\s]", " ", text, flags=re.UNICODE)
     return re.sub(r"\s+", " ", text).strip()
+
+
+# слова без змісту: шаблон питання, а не його тема
+_FILLER = {
+    "what", "is", "are", "was", "a", "an", "the", "of", "in", "on", "to", "for",
+    "do", "does", "did", "you", "your", "me", "we", "it", "its", "so", "and", "or",
+    "can", "could", "would", "tell", "explain", "about", "between", "how", "that",
+    "this", "with", "from", "at", "by", "be", "as", "us", "please", "mean", "means",
+    "why", "when", "where", "which", "use", "used", "using", "there", "have", "has",
+    # розмовні вставки інтерв'юера перед питанням
+    "okay", "ok", "next", "question", "alright", "well", "let", "lets", "move", "now",
+    "um", "uh", "yeah", "yes", "great", "thanks", "thank", "cool", "another", "just",
+    "quick", "quickly", "actually", "basically", "know", "sure",
+}
+
+
+def _ordered_tokens(text):
+    """Змістові слова питання по порядку: без шаблонних, множина -> однина."""
+    out = []
+    for w in _normalize(text).split():
+        if w in _FILLER or len(w) < 2:   # одна літера = уламок whisper ("U.S.")
+            continue
+        if len(w) > 3 and w.endswith("s") and not w.endswith("ss"):
+            w = w[:-1]
+        out.append(w)
+    return out
+
+
+def _tokens(text):
+    return set(_ordered_tokens(text))
+
+
+def _merge_pairs(words, vocab):
+    """whisper пише "mip maps" / "sprite sheet", у файлі "Mipmap" / "spritesheet":
+    сусідню пару зливаємо, якщо злите слово є серед слів prepared-питань."""
+    out, i = [], 0
+    while i < len(words):
+        if i + 1 < len(words) and words[i] + words[i + 1] in vocab:
+            out.append(words[i] + words[i + 1])
+            i += 2
+        else:
+            out.append(words[i])
+            i += 1
+    return out
 
 
 def load_prepared_answers():
@@ -89,7 +132,12 @@ class SuggestionProvider:
         self._last_epoch = None
         self._retried = False
         self.prepared, self.info_text = load_prepared_answers()
-        self.prepared_norm = [(q, a, _normalize(q)) for q, a in self.prepared]
+        self._vocab = set(w for q, _ in self.prepared for w in _ordered_tokens(q))
+        self.prepared_norm = [
+            (q, a, _normalize(q), set(_merge_pairs(_ordered_tokens(q), self._vocab)),
+             _normalize(q).replace(" ", ""))
+            for q, a in self.prepared
+        ]
         self._parse_info_sections()
         if self.enabled:
             self.client = OpenAI(
@@ -159,40 +207,35 @@ class SuggestionProvider:
         return out
 
     def _best_prepared(self, question):
+        """Рахунок = F1 по змістових словах: скільки слів prepared-питання
+        прозвучало (recall) І яку частку почутого воно покриває (precision).
+        Сам recall стріляв хибно: 3 спільні слова з 6 давали 0.5 навіть коли
+        почуте питання було про інше (Q095 lags -> blurry, Q109 mesh)."""
         qn = _normalize(question)
-        qcontent = set(w for w in qn.split() if len(w) >= 4 and w not in _STOPWORDS)
-        best_score, best = 0.0, None
-        for qorig, aorig, qnorm in self.prepared_norm:
-            ratio = difflib.SequenceMatcher(None, qn, qnorm).ratio()
-            # шлях 1: token-coverage по змістових словах (len>=4, без стоп-слів)
-            # — стійкий до префіксів "Can you tell me about your experience with..."
-            qw_content = set(w for w in qnorm.split() if len(w) >= 4 and w not in _STOPWORDS)
-            overlap = qcontent & qw_content
-            coverage = len(overlap) / len(qw_content) if qw_content else 0.0
-            if len(overlap) >= 3 and coverage >= config.MATCH_THRESHOLD:
-                score = coverage
-            # шлях 2: ratio тільки для впевнених збігів + ЗМІСТОВИЙ гейт:
-            # на шумних/коротких рядках 0.6 ratio ловило нерелевантні Q
-            elif ratio >= 0.6 and len(overlap) >= 3:
-                score = ratio
-            # шлях 3: майже-точний повтор транскрипту. Дворівневий гейт:
-            # ratio>=0.9 + 1 змістовне слово (точні визначення), або
-            # ratio>=0.8 + 2 змістових слова (повтори з шумом). Без гейта
-            # на "What is X?" ratio ~0.8 ловить ШАБЛОН, а не зміст
-            # (texture -> Render Texture)
-            elif ratio >= 0.95:
-                # вербатим-повтор навіть зі стоп/короткими токенами
-                # ("MIP map" -> "mipmap"): запас від FP (max 0.83) великий
-                score = ratio
-            elif ratio >= 0.9 and len(overlap) >= 1:
-                score = ratio
-            elif ratio >= 0.8 and len(overlap) >= 2:
-                score = ratio
-            else:
-                score = 0.0
-            if score > best_score:
-                best_score, best = score, (qorig, aorig)
-        if best_score >= config.MATCH_THRESHOLD:
+        heard = _merge_pairs(_ordered_tokens(question), self._vocab)
+        qt = set(heard)
+        qsq = qn.replace(" ", "")
+        # позиція слова в почутому: при рівному рахунку виграє prepared про те,
+        # що названо ПЕРШИМ ("pivot on a sprite" -> Pivot, не Sprite)
+        order = {}
+        for i, w in enumerate(heard):
+            order.setdefault(w, i)
+        best_key, best = (0.0, 0.0, 0.0), None
+        for qorig, aorig, qnorm, ptok, psq in self.prepared_norm:
+            ov = len(qt & ptok)
+            f1 = 0.0
+            if ov:
+                recall, precision = ov / len(ptok), ov / len(qt)
+                f1 = 2 * precision * recall / (precision + recall)
+            # майже дослівний повтор, стійкий до злитих/розбитих слів
+            # ("sprite sheet" = "spritesheet", "mip map" = "mipmap")
+            ratio = difflib.SequenceMatcher(None, qsq, psq).ratio()
+            score = max(f1, ratio if ratio >= 0.9 else 0.0)
+            first = min((order[w] for w in qt & ptok), default=99)
+            key = (round(score, 3), -first, ratio)
+            if key > best_key:
+                best_key, best = key, (qorig, aorig)
+        if best_key[0] >= config.MATCH_THRESHOLD:
             return best
         return None
 
@@ -201,7 +244,7 @@ class SuggestionProvider:
         qn = _normalize(question)
         scored = [
             (difflib.SequenceMatcher(None, qn, qnorm).ratio(), qorig, aorig)
-            for qorig, aorig, qnorm in self.prepared_norm
+            for qorig, aorig, qnorm, _, _ in self.prepared_norm
         ]
         scored.sort(key=lambda x: x[0], reverse=True)
         return [(q, a) for _, q, a in scored[:k]]
@@ -311,6 +354,7 @@ class SuggestionProvider:
                     extra_body={"reasoning_effort": "low"},
                     stream=True,
                 )
+                box["stream"] = stream
                 acc = ""
                 got_first = False
                 last_push = 0.0
@@ -320,9 +364,9 @@ class SuggestionProvider:
                         # прийшло нове питання — стрім застарів, не показуємо
                         return
                     now = time.time()
-                    if not got_first and now - t0 > 10:
-                        # 10с без жодного слова — сервер завис, марно чекати
-                        print("[AI] stream: no content in 10s, falling back")
+                    if not got_first and now - t0 > STREAM_FIRST_WORD_S:
+                        # так довго без жодного слова — сервер завис, марно чекати
+                        print(f"[AI] stream: no content in {STREAM_FIRST_WORD_S}s, falling back")
                         return
                     piece = ""
                     if chunk.choices:
@@ -341,12 +385,24 @@ class SuggestionProvider:
                     box["a"] = acc.strip()
             except Exception as e:
                 print(f"[AI] stream error: {e!r}")
+            finally:
+                _close(box.get("stream"))
+
+        def _close(stream):
+            # кинутий стрім треба ЗАКРИТИ: інакше сервер генерує далі, запити
+            # накопичуються, а під 5 одночасними перше слово йде 20-39с замість 1.4с
+            try:
+                if stream is not None:
+                    stream.close()
+            except Exception:
+                pass
 
         th = threading.Thread(target=_worker, daemon=True)
         th.start()
         th.join(timeout=35)
         if th.is_alive():
             print("[AI] stream stalled, abandoned")
+            _close(box.get("stream"))
             return None
         return box.get("a") or None
 

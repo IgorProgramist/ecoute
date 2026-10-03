@@ -839,6 +839,9 @@ A: Shader Graph is a visual node-based editor for creating Shaders without writi
 Q: What is the Universal Render Pipeline?
 A: The Universal Render Pipeline is Unity's modern rendering solution that controls how scenes are rendered each frame. It allows customization through Renderer Features and includes built-in post-processing effects.
 
+Q: What is URP?
+A: The Universal Render Pipeline is Unity's modern rendering solution that controls how scenes are rendered each frame. It allows customization through Renderer Features and includes built-in post-processing effects.
+
 Q: What are Renderer Features?
 A: Renderer Features are built-in effects that can be added to URP to extend rendering. Common features include Render Objects, Decals, SSAO, and Screen Space Shadows. Custom features can be created for outlines, blur, or game-specific effects. Motion Blur and Bloom are post-processing effects, together with Vignette, Color Adjustments, Tonemapping, and Depth of Field.
 

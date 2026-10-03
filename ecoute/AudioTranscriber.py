@@ -18,6 +18,13 @@ class AudioTranscriber:
         self.transcript_data = {"You": [], "Speaker": []}
         self.speaker_buffer = ""   # монотонний буфер питання
         self.buffer_epoch = 0      # номер відстрілу
+        # буфер = завершені фрази + ПОТОЧНА фраза. Поточну whisper щоразу
+        # розпізнає з початку (last_sample накопичується), тому її текст
+        # ЗАМІНЮЄМО, а не дописуємо — інакше питання повторюється 2-4 рази
+        self._speaker_done = ""
+        self._speaker_current = ""
+        self._buffer_phrase_id = 0
+        self._drop_speaker_audio = False
         self.transcript_changed_event = threading.Event()
         self.audio_model = model
         self.audio_sources = {
@@ -113,9 +120,15 @@ class AudioTranscriber:
 
     def update_last_sample_and_phrase_status(self, who_spoke, data, time_spoken):
         source_info = self.audio_sources[who_spoke]
-        if source_info["last_spoken"] and time_spoken - source_info["last_spoken"] > timedelta(seconds=PHRASE_TIMEOUT):
+        dropped = who_spoke == "Speaker" and self._drop_speaker_audio
+        if dropped:
+            self._drop_speaker_audio = False
+        if dropped or (source_info["last_spoken"] and time_spoken - source_info["last_spoken"] > timedelta(seconds=PHRASE_TIMEOUT)):
             source_info["last_sample"] = bytes()
             source_info["new_phrase"] = True
+            # лічильник, а не прапорець: кілька шматків за один прохід черги
+            # перетирали new_phrase останнім значенням
+            source_info["phrase_epoch"] += 1
         else:
             source_info["new_phrase"] = False
 
@@ -164,9 +177,14 @@ class AudioTranscriber:
         if who_spoke == "Speaker":
             # ОДИН монотонний буфер: питання НЕ розбивається на під-питання.
             # Все почуте з минулого відстрілу дописується сюди.
-            self.speaker_buffer = (self.speaker_buffer + " " + text).strip()
-            if len(self.speaker_buffer) > 4000:
-                self.speaker_buffer = self.speaker_buffer[-2000:]
+            if source_info["phrase_epoch"] != self._buffer_phrase_id:
+                # почалась нова фраза: попередня завершена, зберігаємо її
+                self._buffer_phrase_id = source_info["phrase_epoch"]
+                self._speaker_done = (self._speaker_done + " " + self._speaker_current).strip()
+            self._speaker_current = text
+            if len(self._speaker_done) > 4000:
+                self._speaker_done = self._speaker_done[-2000:]
+            self.speaker_buffer = (self._speaker_done + " " + self._speaker_current).strip()
 
         if source_info["new_phrase"] or len(transcript) == 0:
             if len(transcript) > MAX_PHRASES:
@@ -178,6 +196,10 @@ class AudioTranscriber:
     def clear_speaker_buffer(self):
         """Викликається після відстрілу відповіді: далі буфер з чистого."""
         self.speaker_buffer = ""
+        self._speaker_done = ""
+        self._speaker_current = ""
+        # аудіо вже відданого питання не має потрапити в наступне
+        self._drop_speaker_audio = True
         self.buffer_epoch += 1
 
     def get_current_speaker_phrase(self):
@@ -220,3 +242,5 @@ class AudioTranscriber:
         self.audio_sources["Speaker"]["new_phrase"] = True
 
         self.speaker_buffer = ""
+        self._speaker_done = ""
+        self._speaker_current = ""
