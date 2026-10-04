@@ -17,6 +17,10 @@ ABOUT ME (facts about me, use them in answers):
 - Pur-Pur Games (BWF), Dnipro, 12.2014 - 12.2015, Junior Flash / Flex Developer (AS3). Developed client-server architecture for social games. Worked on slot and casual games for social platforms. Applied MVC and OOP principles. Worked with HTTP, XML, JSON, Greensock and Feathers.
 - Portfolio details. Slot Game Preview - created all animations, integrated UI elements and visual content. GameChatUnity - Unity chat system with resolution-independent layout, 4 custom scripts. BotBusters (3D game) - created all UI screens and popups, integrated animations, bosses and enemies, worked on lobby UI and popup animations. Player_Spine_to_Unity - Spine animation integration into Unity, basic character controller. Word Farm Adventure - full game integration and setup, excluding UI. Adventure_3Dgame - Unity 3D prototype with custom menu, player movement, health mechanics, particle feedback, full gameplay logic, VFX integration and scene setup.
 - There are no measured numbers from my past projects here (FPS, percent, milliseconds, memory). Do not state any.
+- Performance work I really did at work: assembled and optimized atlases, split and cleaned up Canvas and UI, set texture sizes and compression. Talk only about these when asked about my optimization experience.
+- I profiled games on a real Android phone connected by USB: a Development Build with Autoconnect Profiler, and the Profiler window in the Editor attached to the phone. I also used the Frame Debugger.
+- Addressables: I used Addressables at work in a production project.
+- Shaders: I have not written shader code by hand at work. I know how shaders work and the basics of Shader Graph. Never say that I write HLSL or shader code by hand.
 
 UNITY KNOWLEDGE (facts, in simple words):
 
@@ -1118,6 +1122,15 @@ A: An AssetPostprocessor is an editor script that runs code before or after Unit
 
 Q: What is the difference between EditMode and PlayMode tests?
 A: EditMode tests run in the Editor without Play - fast, and good for tools and data checks. PlayMode tests run real frames with the game systems working, which is needed for gameplay and UI animation.
+
+Q: Have you written shaders by hand?
+A: Not in production. My work was mostly UI, animation and atlases, so shaders were not part of my tasks. I understand how shaders work and what makes them expensive on mobile, and I can build simple effects in Shader Graph.
+
+Q: How do you profile a game on a real phone?
+A: A Development Build with Autoconnect Profiler is made in the Build Profiles window. The phone is connected by USB with USB debugging turned on, and the game is started with Build And Run. Then the Profiler window in the Editor is switched from Editor to the phone, and it shows what takes time on the real device.
+
+Q: Tell me about a time you fixed a performance problem.
+A: Most of my performance work was with atlases, UI and textures. I packed sprites for one screen into shared atlases, split static and often-changing UI into separate Canvases, turned off Raycast Target where it was not needed, and set texture sizes and compression for mobile. After that the screens used less memory and fewer draw calls.
 
 --- QUESTIONS ABOUT MY HOME ASSIGNMENT (they discuss it in the interview) ---
 

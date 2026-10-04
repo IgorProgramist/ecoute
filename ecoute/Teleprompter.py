@@ -15,6 +15,11 @@ CHUNK_WORDS = 120         # скільки слів стрічки вантаж�
                           # цілим лейблом ламають tkinter)
 
 
+def _is_pause_key(name):
+    """Пауза стрічки = тільки правий Ctrl (бібліотека keyboard називає його 'right ctrl')."""
+    return (name or "").lower() in ("right ctrl", "ctrl right", "right control")
+
+
 class Teleprompter(tk.Canvas):
     def __init__(self, parent, height=140):
         super().__init__(parent, height=height, highlightthickness=0, bg=CHROMA)
@@ -75,11 +80,9 @@ class Teleprompter(tk.Canvas):
             print("[INFO] global hotkey armed: 1 = show CoverLetter")
         except Exception as e:
             print(f"[WARN] global '1' hotkey unavailable ({e})")
-        # пауза тільки на Ctrl (лівий/правий) — глобальний хук нижче ловить Alt
-        self.bind_all("<Control_L>", lambda e: self.toggle_pause())
+        # пауза тільки на ПРАВОМУ Ctrl (глобальний хук нижче ловить його з будь-якого
+        # вікна). Alt прибрано: Alt+Tab на інтерв'ю зупиняв або запускав стрічку
         self.bind_all("<Control_R>", lambda e: self.toggle_pause())
-        self.bind_all("<Alt_L>", lambda e: self.toggle_pause())
-        self.bind_all("<Alt_R>", lambda e: self.toggle_pause())
 
     def _safe_height(self):
         h = self.winfo_height()
@@ -163,10 +166,9 @@ class Teleprompter(tk.Canvas):
         self.hide()
 
     def _start_global_pause(self):
-        """Глобальний хук: Alt працює навіть коли вікно суфлера не в фокусі."""
+        """Глобальний хук: правий Ctrl працює навіть коли вікно суфлера не в фокусі."""
         def _cb(event):
-            name = (event.name or "").lower()
-            if "alt" in name:
+            if _is_pause_key(event.name):
                 try:
                     self.after(0, self.toggle_pause)
                 except Exception:
@@ -174,9 +176,9 @@ class Teleprompter(tk.Canvas):
         try:
             import keyboard
             keyboard.on_press(_cb)
-            print("[INFO] global pause hotkey armed: Alt (works anywhere)")
+            print("[INFO] global pause hotkey armed: right Ctrl (works anywhere)")
         except Exception as e:
-            print(f"[WARN] global Alt pause unavailable ({e}); pause works only when window focused")
+            print(f"[WARN] global right Ctrl pause unavailable ({e}); pause works only when window focused")
 
     def toggle_pause(self):
         # захист від повторів при зажатому Ctrl

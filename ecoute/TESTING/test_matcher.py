@@ -32,6 +32,10 @@ def title(sp, heard):
     ("What is the difference between transform and rect transform?",
      "What is the difference between Transform and RectTransform?"),
     ("What are MIP maps?", "What is a Mipmap?"),
+    ("What is GPU Instance?", "What is GPU Instancing?"),
+    ("What is 9 slice?", "What is 9-slicing?"),
+    ("What is object pool?", "What is Object Pooling?"),
+    ("What is alpha clip?", "What is Alpha Clipping?"),
     # spoken lead-ins and rephrasings
     ("Can you tell me what a game object is?", "What is a GameObject?"),
     ("So what is a component in unity?", "What is a Component?"),
@@ -39,6 +43,10 @@ def title(sp, heard):
     ("What is a pivot on a sprite?", "What is a Pivot?"),
     ("Why does a scene need an event system?", "What is an EventSystem?"),
     ("What is URP?", "What is URP?"),
+    # experience questions that DO have their own prepared answer keep it
+    ("Have you written shaders by hand?", "Have you written shaders by hand?"),
+    ("Tell me about a time you fixed a performance problem.", "Tell me about a time you fixed a performance problem."),
+    ("How do you profile a game on a real phone?", "How do you profile a game on a real phone?"),
 ])
 def test_finds_the_right_prepared_answer(sp, heard, want):
     assert title(sp, heard) == want
@@ -52,6 +60,10 @@ def test_finds_the_right_prepared_answer(sp, heard, want):
     "What is your salary expectation?",
     # one word swapped in a short question = another topic (was answered as URP)
     "What is the built-in render pipeline?",
+    # asked about the candidate's own experience: a definition is not the answer
+    "What shaders have you made?",
+    "Tell me about your experience with Shader Graph.",
+    "Have you used Blend Trees in a real project?",
     # asked for a difference: the definition of one of the two is not the answer
     "What is the difference between a Sprite Atlas and a spritesheet?",
     # a prepared Q with one content word must not catch a question that only ends with it

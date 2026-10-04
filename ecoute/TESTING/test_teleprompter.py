@@ -37,6 +37,13 @@ def _words(n, tag="w"):
     return ["%s%d" % (tag, i) for i in range(n)]
 
 
+def test_only_right_ctrl_pauses_the_ribbon():
+    """Alt used to pause it from any window, so Alt+Tab stopped the ribbon mid-answer."""
+    assert TP._is_pause_key("right ctrl")
+    for other in ("alt", "left alt", "right alt", "alt gr", "ctrl", "left ctrl", "tab", "1", None):
+        assert not TP._is_pause_key(other)
+
+
 def test_streaming_a_short_answer_just_grows_the_label():
     r = _ribbon(_words(5))
     TP.Teleprompter.update_text(r, " ".join(_words(9)))

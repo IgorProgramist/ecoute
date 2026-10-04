@@ -92,6 +92,12 @@ _BACK_RE = re.compile(
     r"(?:you\s+\w+\s+)?(?:it|they|them|that|this|one|those|these)\b")
 
 
+_PERSONAL_RE = re.compile(
+    r"\b(your (own )?experience|experience (with|in)|have you (ever )?\w+|did you (ever )?\w+|"
+    r"in your (work|projects?|last job|previous job|career)|at your (last|previous) job|"
+    r"tell me about a time|what \w+ have you (made|done|built|used|written|shipped))\b")
+
+
 def _utterance_kind(text):
     """'ack'  = "Okay, great, thank you" — нічого не показуємо;
     'more' = "Tell me more" / "Why?" без власної теми — продовження попередньої відповіді;
@@ -121,6 +127,25 @@ def _ordered_tokens(text):
 
 def _tokens(text):
     return set(_ordered_tokens(text))
+
+
+def _stem(w):
+    """whisper чує "GPU Instance" замість "Instancing", "slice" замість "slicing":
+    для ЗБІГУ з prepared-питаннями зводимо форми слова до спільної основи."""
+    if len(w) > 5 and w.endswith("ing"):
+        w = w[:-3]
+        if len(w) > 2 and w[-1] == w[-2]:
+            w = w[:-1]          # clipping -> clip, not clipp
+    elif len(w) > 4 and w.endswith("e"):
+        w = w[:-1]              # instance -> instanc, slice -> slic
+    return w
+
+
+_DIFF = _stem("difference")
+
+
+def _match_words(text):
+    return [_stem(w) for w in _ordered_tokens(text)]
 
 
 _PART_RE = re.compile(
@@ -213,9 +238,9 @@ class SuggestionProvider:
         self._last_epoch = None
         self._retried = False
         self.prepared, self.info_text = load_prepared_answers()
-        self._vocab = set(w for q, _ in self.prepared for w in _ordered_tokens(q))
+        self._vocab = set(w for q, _ in self.prepared for w in _match_words(q))
         self.prepared_norm = [
-            (q, a, _normalize(q), set(_merge_pairs(_ordered_tokens(q), self._vocab)),
+            (q, a, _normalize(q), set(_merge_pairs(_match_words(q), self._vocab)),
              _normalize(q).replace(" ", ""))
             for q, a in self.prepared
         ]
@@ -293,7 +318,7 @@ class SuggestionProvider:
         Сам recall стріляв хибно: 3 спільні слова з 6 давали 0.5 навіть коли
         почуте питання було про інше (Q095 lags -> blurry, Q109 mesh)."""
         qn = _normalize(question)
-        heard = _merge_pairs(_ordered_tokens(question), self._vocab)
+        heard = _merge_pairs(_match_words(question), self._vocab)
         qt = set(heard)
         qsq = qn.replace(" ", "")
         # позиція слова в почутому: при рівному рахунку виграє prepared про те,
@@ -314,7 +339,7 @@ class SuggestionProvider:
             lone_tail = len(ptok) == 1 and len(qt) > 1 and ov and order[next(iter(qt & ptok))] != 0
             # питають про РІЗНИЦЮ, а prepared — це визначення одного з двох:
             # "difference between a Sprite Atlas and a spritesheet" -/-> Sprite Atlas
-            wants_diff = "difference" in qt and "difference" not in ptok
+            wants_diff = _DIFF in qt and _DIFF not in ptok
             if ov and not lone_tail and not wants_diff and not (len(ptok) <= 3 and ov < len(ptok)):
                 recall, precision = ov / len(ptok), ov / len(qt)
                 f1 = 2 * precision * recall / (precision + recall)
@@ -327,6 +352,11 @@ class SuggestionProvider:
             if key > best_key:
                 best_key, best, best_ov = key, (qorig, aorig), ov
         if best_key[0] < config.MATCH_THRESHOLD:
+            return None
+        # питають про ДОСВІД кандидата, а не про термін: "What shaders have you
+        # made?" показувало визначення "What is a Shader?". Таке йде в AI з
+        # фактами про кандидата, якщо немає готової відповіді саме на це питання
+        if best_key[0] < 0.9 and _PERSONAL_RE.search(question.lower()):
             return None
         # частина складного питання: одного спільного слова мало, якщо частина
         # не складається лише з нього ("what do you check first" -> "How did
