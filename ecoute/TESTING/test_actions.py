@@ -50,6 +50,17 @@ def test_question_finds_its_topic(sp, heard, want):
 
 
 @pytest.mark.parametrize("heard", [
+    # one shared word is not the topic: "Sorting LAYER" is not Animator layers,
+    # "Content SIZE Fitter" is not RectTransform, "CANVAS Scaler" is not render modes
+    "What is a Sorting Layer?",
+    "What is a Content Size Fitter?",
+    "What is a Canvas Scaler?",
+    # dry check of the vacancy questions: ONE word from the brackets of a title is not a topic
+    "What is Timeline?",                                                  # Profiler has a Timeline view
+    "Which assets do you deliver remotely and which stay in the build?",  # Profiler: "profile a build"
+    "How do you update content without an app update?",                   # Scroll Rect: "content"
+    "How do you find the root cause of a visual bug?",                    # Animator: "Apply Root Motion"
+    "What is the difference between Tight Mesh and Full Rect?",           # Scroll Rect: "Rect"
     "What is your salary expectation?",
     "Tell me about yourself.",
     "What is your experience with Unity?",
@@ -75,6 +86,13 @@ def test_unrelated_question_gets_no_cookbook(sp, heard):
     ("What can go wrong with it?", "How do you add an animation event?",
      "ANIMATION CURVES AND ANIMATION EVENTS"),
     ("Tell me more.", "How do you use the Frame Debugger?", "URP CAMERA AND PIPELINE"),
+    # dry check 2026-10-04: "parameters" is a word in the title of the Button topic, so this
+    # follow-up pulled the Button cookbook after 28 of 30 questions. "its" = the previous topic
+    ("Tell me more about its parameters and how to use it.", "What is an Animator?", "ANIMATOR COMPONENT"),
+    ("Tell me more about its parameters and how to use it.", "What is a Slider?", "UI SLIDER"),
+    ("Tell me more about their parameters and how to use them.", "What are anchors?",
+     "RECTTRANSFORM AND ANCHORS"),
+    ("Tell me more about its parameters and how to use it.", "What is a Prefab?", None),
 ])
 def test_follow_up_takes_topic_from_previous_question(sp, heard, prev_q, want):
     assert topic(sp, heard, (prev_q, "some answer")) == want
@@ -128,6 +146,17 @@ def test_whisper_profile_for_profiler_still_finds_the_profiler(sp):
      "Yes, I used it at work. In my slot projects it showed why batching broke."),
     # Spine is never mentioned, even in an experience answer
     ("Yes, I animated UI. I also used Spine for characters.", True, "Yes, I animated UI."),
+    # Igor 2026-10-04: when nobody asks about experience, nothing about his own work at all
+    ("I baked lightmaps at work, so this is familiar. First, I set the lights to Baked mode.", False,
+     "First, I set the lights to Baked mode."),
+    ("First I capture the game. Honestly, I have not used the Profile Analyzer at work, but this is how it works.",
+     False, "First I capture the game."),
+    ("Layers and Blend Trees exist too, though those didn't come up in my work.", False,
+     "Layers and Blend Trees exist too, though those didn't come up in my work."),   # only sentence: kept
+    ("The Profiler shows the frame. I used both at work on a real phone.", False, "The Profiler shows the frame."),
+    # steps in the present tense are how Unity is used, not a story about his job
+    ("First, I select the panel. Second, I open the Anchor Presets.", False,
+     "First, I select the panel. Second, I open the Anchor Presets."),
     # nothing to cut
     ("Anchors pin the element to its parent.", False, "Anchors pin the element to its parent."),
     # the whole answer would vanish: better the model's words than an empty ribbon
@@ -135,6 +164,90 @@ def test_whisper_profile_for_profiler_still_finds_the_profiler(sp):
 ])
 def test_project_and_spine_sentences_are_cut(text, personal, want):
     assert SP._strip_projects(text, personal) == want
+
+
+YES = "Yes, I worked with it."
+NO = "No, I have not worked with it, but I know how it works."
+
+
+@pytest.mark.parametrize("question, want", [
+    # Igor 2026-10-04: just "yes, worked" - never "a lot", never where or what for.
+    # The code says it, the AI never sees his background on these questions
+    ("Have you worked with the Animator?", YES),
+    ("Have you used the Frame Debugger at work?", YES),
+    ("Have you baked lighting in a real project?", YES),
+    ("What is your experience with the Profiler?", YES),
+    # his own "Not used at work" line in ABOUT ME
+    ("Have you used the Memory Profiler at work?", NO),
+    ("Did you use the Profile Analyzer in your projects?", NO),
+    ("Have you built Blend Trees at work?", NO),
+    ("What is your experience with Animator layers?", NO),
+    # ABOUT ME says nothing either way: no claim, the answer starts with Unity itself
+    ("Have you used occlusion culling?", ""),
+])
+def test_yes_or_no_comes_from_about_me_not_from_the_ai(sp, question, want):
+    assert sp._experience_opener(question) == want
+
+
+def test_experience_style_tells_the_ai_to_stay_off_the_candidate(sp):
+    style = SP.STYLE_EXPERIENCE.lower()
+    assert "do not say yes or no" in style and "nothing about the candidate" in style
+
+
+def test_have_you_worked_with_it_gets_a_long_answer_through_the_related_topics(sp):
+    # Igor 2026-10-04: "Have you worked with the Animator?" is never just "yes". They ask
+    # so that he talks: yes or no, then the Animator, then the Animator Controller, and so on
+    q = "Have you worked with the Animator?"
+    action = sp._relevant_action(q)
+    assert action is not None and action[0].startswith("ANIMATOR")
+    assert SP._answer_words(q, True) == 120
+    assert SP._style_for(q, True) == SP.STYLE_EXPERIENCE
+    related = sp._related_summaries(action)
+    assert "Animator Controller" in related          # a neighbouring topic is offered
+    assert action[1].split("LESSON")[0].strip() not in related   # the chosen one is not repeated
+    assert "LESSON" not in related                   # summaries only: the prompt stays small
+
+
+@pytest.mark.parametrize("question, has_topic, want", [
+    ("How do you set up a blend tree?", True, "STYLE_STEPS"),
+    ("What is a blend tree?", True, "STYLE_PLAIN"),
+    ("Have you used the Memory Profiler at work?", True, "STYLE_EXPERIENCE"),
+    # no cookbook topic: nothing to walk through, the plain rule answers
+    ("Have you worked in a big team?", False, "STYLE_PLAIN"),
+])
+def test_answer_style_follows_the_kind_of_question(question, has_topic, want):
+    assert SP._style_for(question, has_topic) == getattr(SP, want)
+
+
+def test_follow_up_takes_its_knowledge_from_the_question_it_follows(sp):
+    # voice run 2026-10-04: after "What is a Prefab Variant?" the follow-up "Tell me more about its
+    # parameters and how to use it" was answered about the DOT PRODUCT - the knowledge section and the
+    # example answers were picked by the words of the follow-up ("parameters", "use")
+    more = "Tell me more about its parameters and how to use it."
+    assert sp._topic_basis(more, ("What is a Prefab Variant?", "x")) == "What is a Prefab Variant?"
+    # a second follow-up in a row still belongs to the same first question
+    assert sp._topic_basis("Tell me more about that.", (more, "y")) == "What is a Prefab Variant?"
+    # a new real question starts over
+    q = "What is a draw call?"
+    assert sp._topic_basis(q, (more, "y")) == q
+    assert sp._topic_basis("Tell me more.", (q, "z")) == q
+
+
+def test_how_to_without_a_cookbook_topic_still_gets_steps_after_the_definition(sp):
+    # "How do you structure a base prefab and its variants?" showed only "A Prefab Variant is..."
+    q = "How do you structure a base prefab and its variants?"
+    assert sp._how_to_plan(q, sp._best_prepared(q)) == "glue"
+
+
+def test_about_me_reaches_the_ai_only_for_experience_questions(sp):
+    # the model cannot retell his work if it never sees it
+    sp._personal = False
+    assert "ABOUT ME" not in sp._relevant_info("How do you bake the lighting?")
+    sp._personal = True
+    try:
+        assert "ABOUT ME" in sp._relevant_info("Have you baked lighting in a real project?")
+    finally:
+        sp._personal = False
 
 
 def test_prompt_forbids_code_names():
@@ -221,6 +334,16 @@ def test_chatbot_opener_is_removed(text, want):
     assert SP._strip_opener(text) == want
 
 
+@pytest.mark.parametrize("heard", [
+    "Tell me more about its parameters and how to use it.",
+    "Tell me more about their parameters and how to use them.",
+    "Can you say more about that?",
+])
+def test_more_about_it_is_a_follow_up_not_a_new_question(heard):
+    # as a "question" it was matched against prepared answers by the word "parameters"
+    assert SP._utterance_kind(heard) == "more"
+
+
 def test_new_question_does_not_inherit_the_previous_topic(sp):
     assert topic(sp, "What is your salary expectation?", ("What is a Blend Tree?", "x")) is None
 
@@ -261,7 +384,7 @@ def test_answer_length_grows_with_the_kind_of_question():
     short = SP._answer_words("What is a blend tree?", False)
     more = SP._answer_words("Can you tell me more?", True)
     steps = SP._answer_words("How do you set up a blend tree?", True)
-    assert short < more < steps
+    assert short < steps < more == 120
 
 
 @pytest.mark.parametrize("text, want", [

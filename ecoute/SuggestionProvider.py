@@ -32,11 +32,10 @@ SYSTEM_PROMPT_TEMPLATE = (
     "info and prepared answers given to you. NEVER invent numbers, percentages, FPS values, "
     "project names or stories that are not written there — describe what was done and how, "
     "without made-up figures. "
-    "Do not bring up the candidate's projects, games or past work, and do not give examples "
-    "'from my project', unless the interviewer asks about experience. Explain how the thing works. "
-    "If the interviewer asks whether the candidate has used a tool or feature at work and the "
-    "background info does not say so, do NOT claim it: say plainly that it did not come up at work, "
-    "then explain in one or two sentences how it works. "
+    "Answer only about Unity itself: what the thing is, how it works, how it is done. "
+    "Unless the interviewer asks about the candidate's experience, say NOTHING about the candidate's "
+    "own work, projects, games or experience — no 'at work', no 'in my project', no 'I used it', "
+    "no 'it did not come up'. "
     "The question comes from speech recognition and may contain misheard words — "
     "answer about the closest real Unity term and never comment on the wording. "
     "Sound like a person talking, not like a textbook: never use words like utilize, leverage, "
@@ -56,6 +55,26 @@ STYLE_STEPS = (
     "The interviewer asks HOW to do it: answer as a few short spoken steps, each a plain sentence "
     "that starts with First, Second, Third, Then or Finally. No digits, no bullet points, no markdown."
 )
+# "чи працював ти з X": питають, щоб кандидат РОЗПОВІВ, а не сказав "так"
+STYLE_EXPERIENCE = (
+    "The interviewer asks whether the candidate worked with something — they ask so that the candidate "
+    "talks about the topic. The candidate has already answered yes or no himself: do NOT say yes or no, "
+    "and say nothing about the candidate, his work or his experience. Tell about the thing itself, "
+    "moving through the related parts one after another (for example the Animator, then the Animator "
+    "Controller, then states and transitions), one or two simple sentences for each part. "
+    "Every part must be a different topic, never repeat one. Plain sentences, no lists, no markdown."
+)
+# питання про досвід, для якого немає теми кукбукса: AI бачить ABOUT ME
+RULE_HONEST = (
+    "If the interviewer asks whether the candidate has used a tool or feature: say yes ONLY if the "
+    "background info says so, otherwise say plainly that the candidate has not worked with it. "
+    "Keep it to one short sentence about the candidate, with no story about a project."
+)
+EXPERIENCE_WORDS = 120
+# так чи ні каже КОД за рядками ABOUT ME, а не AI: модель дописувала "a lot at
+# all my jobs, mainly for UI, popups and character animations"
+EXPERIENCE_YES = "Yes, I worked with it."
+EXPERIENCE_NO = "No, I have not worked with it, but I know how it works."
 ACTION_NOTE = (
     "Reference notes about this Unity topic. They describe how Unity works, NOT what the candidate "
     "did — never turn them into a personal story. Take only the facts the question needs and say "
@@ -117,6 +136,11 @@ _BACK_RE = re.compile(
     r"(?:you\s+\w+\s+)?(?:it|they|them|that|this|one|those|these)\b")
 
 
+# "Tell me more about its parameters and how to use it": продовження попередньої теми,
+# хоч у репліці й є власні слова
+_MORE_ABOUT_RE = re.compile(r"\bmore about (it|its|their|them|that|this|these|those)\b")
+
+
 _PERSONAL_RE = re.compile(
     r"\b(your (own )?experience|experience (with|in)|have you (ever )?\w+|did you (ever )?\w+|"
     r"in your (work|projects?|last job|previous job|career)|at your (last|previous) job|"
@@ -140,7 +164,7 @@ def _utterance_kind(text):
     # "Does it reduce draw calls?", "When would you use one?": питання про ТЕ,
     # про що щойно говорили. Без попередньої теми prepared-збіг тут хибний
     # (після SRP Batcher показало "How do you reduce draw calls?")
-    if _BACK_RE.match(text.lower().strip()):
+    if _BACK_RE.match(text.lower().strip()) or _MORE_ABOUT_RE.search(text.lower()):
         return "more"
     topic = [w for w in _ordered_tokens(text) if w not in _ACK]
     if _MORE_RE.search(text.lower()) and not [w for w in topic if not _MORE_RE.fullmatch(w)]:
@@ -235,11 +259,25 @@ def _answer_words(question, has_topic):
     """Довжина AI-відповіді: коротко за замовчуванням, довше на "розкажи детальніше",
     найдовше на "як це зробити" (кроки), якщо для теми є кукбукс."""
     words = _max_words(question)
+    if has_topic and _PERSONAL_RE.search(question.lower()):
+        return EXPERIENCE_WORDS
     if has_topic and _wants_steps(question):
         return words + 30
     if _utterance_kind(question) == "more":
-        return words + 20   # "tell me more" чекає на розгорнуту відповідь
+        # "tell me more about its parameters and how to use it": на 69 словах
+        # відповідь устигала назвати параметри й не доходила до "як користуватися"
+        return EXPERIENCE_WORDS
     return words
+
+
+def _style_for(question, has_topic):
+    """Як AI має будувати відповідь: розповідь по суміжних темах на "чи працював
+    ти з X", кроки на "як зробити", інакше звичайні речення."""
+    if has_topic and _PERSONAL_RE.search(question.lower()):
+        return STYLE_EXPERIENCE
+    if has_topic and _wants_steps(question):
+        return STYLE_STEPS
+    return STYLE_PLAIN
 
 
 _BOOKISH_RE = re.compile(
@@ -271,17 +309,20 @@ def _strip_opener(text):
 
 
 _PROJECT_RE = re.compile(
-    r"\b(?:in|on|at|from|for) my (?:\w+ ){0,3}(?:work|projects?|games?|job|team)\b", re.I)
+    r"\b(?:in|on|at|from|for) my (?:\w+ ){0,3}(?:work|projects?|games?|job|team)\b|"
+    r"\bat work\b|\bin my experience\b|\bcome up in\b", re.I)
 _SPINE_RE = re.compile(r"\bspine\b", re.I)
 
 
 def _strip_projects(text, personal):
-    """Викидає речення про проєкти кандидата, якщо про досвід не питали
-    (personal=False), і речення зі словом Spine - завжди. Промпт це забороняє,
-    але kimi-k3 дописав "In my slot game work, animations were ... Spine clips".
+    """Викидає речення про власний досвід кандидата, якщо про досвід не питали
+    (personal=False), і речення зі словом Spine - завжди. Ігор 2026-10-04:
+    "коли не просять - не казати, відповіді тільки по Unity; про свій досвід я
+    сам напишу". Кроки в теперішньому часі ("First, I select...") - не досвід.
     Якщо від відповіді нічого не лишається - повертає її як є."""
     kept = [s for s in re.split(r"(?<=[.!?]) +", text)
-            if not _SPINE_RE.search(s) and (personal or not _PROJECT_RE.search(s))]
+            if not _SPINE_RE.search(s)
+            and (personal or not (_PROJECT_RE.search(s) or _EXPERIENCE_RE.search(s.lower())))]
     return " ".join(kept) if kept else text
 
 
@@ -333,15 +374,32 @@ def load_actions():
 # питання про ТЕ, про що щойно говорили
 _REFERS_RE = re.compile(r"\b(it|that|this|they|them|one|there|those|these)\b")
 
+# слова питання про досвід, які не є назвою того, про що питають
+_EXPERIENCE_WORDS = set(_stem(w) for w in (
+    "work", "worked", "working", "built", "build", "made", "make", "done", "tried", "try",
+    "experience", "real", "project", "production", "ever", "job", "before", "any", "baked"))
+
 # слова, що є майже в кожній темі: самі по собі тему не вибирають
 # ("set": до нього зводиться і "Settings", яке стоїть у кожному SUMMARY)
-_ACTION_IGNORE = {"unity", "ui", "set", "up"}
+_ACTION_IGNORE = {"unity", "ui", "set", "up",
+                  # дієслова питання, а не назва теми: "How do anchors WORK?"
+                  "work", "make", "take", "add", "find", "get",
+                  # "rect" є і в Full Rect, і в RectMask: саме по собі не Scroll Rect
+                  "rect"}
 
 
 def _action_words(text):
     """Слова для вибору теми кукбукса. whisper чує "Unity Profile" замість
     "Profiler" - для тем це одне слово."""
-    return [_stem("profile") if w == "profiler" else w for w in _match_words(text)]
+    out = []
+    for w in _match_words(text):
+        if w == "profiler":
+            w = _stem("profile")
+        elif len(w) > 4 and w.endswith("ed"):
+            # "bake the lighting" має знайти тему "BAKED LIGHTING"
+            w = _stem(w[:-1] if w.endswith(("ked", "ced", "led", "ped", "ted")) else w[:-2])
+        out.append(w)
+    return out
 
 
 def _merge_pairs(words, vocab):
@@ -405,6 +463,7 @@ class SuggestionProvider:
         self._parse_info_sections()
         self._load_actions()
         self._personal = False
+        self._basis_q = None
         if self.enabled:
             self.client = OpenAI(
                 api_key=api_key,
@@ -460,12 +519,64 @@ class SuggestionProvider:
         best_key, best = None, -1
         for i, (name, rest, summary) in enumerate(self._action_keys):
             title = 3 * len(words & name) + 2 * len(words & (rest - name))
-            if not title:
+            # тему називає слово з її НАЗВИ або щонайменше два слова з дужок:
+            # одне слово з дужок - випадковість ("Timeline" є у темі Profiler,
+            # "root" - у темі Animator, "content" - у Scroll Rect)
+            if not (words & name) and len(words & rest) < 2:
                 continue
             key = (title, i == prefer, len(words & (summary - name - rest)))
             if best_key is None or key > best_key:
                 best_key, best = key, i
+        # коротка назва з 2-3 слів має збігтися більше ніж наполовину: "Sorting
+        # Layer" - не шари аніматора, "Content Size Fitter" - не RectTransform
+        if best >= 0 and len(words) <= 3:
+            name, rest, summary = self._action_keys[best]
+            if 2 * len(words & (name | rest | summary)) <= len(words):
+                return -1
         return best
+
+    def _experience_opener(self, question):
+        """"Have you worked with X?" -> EXPERIENCE_NO, якщо X є в рядку "Not used at
+        work" з ABOUT ME; EXPERIENCE_YES, якщо всі слова X є в решті ABOUT ME;
+        "" якщо ABOUT ME про X мовчить (тоді відповідь одразу про Unity)."""
+        subject = set(_match_words(question)) - _EXPERIENCE_WORDS
+        if not subject or not self.info_about:
+            return ""
+        used = []
+        for line in self.info_about.splitlines():
+            if "not used at work" in line.lower():
+                items = line.split(":", 1)[1].split(".", 1)[0].split(",")
+                if any(set(_match_words(item)) <= subject for item in items if item.strip()):
+                    return EXPERIENCE_NO
+            else:
+                used.append(line)
+        return EXPERIENCE_YES if subject <= set(_match_words(" ".join(used))) else ""
+
+    def _related_summaries(self, action, limit=3):
+        """SUMMARY сусідніх тем кукбукса (спільне слово в назві: Animator ->
+        Animator Controller, Animator Layers...). Лише SUMMARY, без уроку:
+        AI має про що розповісти далі, а промпт лишається малим."""
+        i = self.actions.index(action)
+        mine, out = self._action_names[i], []
+        for j, (title, body) in enumerate(self.actions):
+            if j != i and mine & self._action_names[j]:
+                out.append(title + "\n" + body.split("LESSON", 1)[0].replace("SUMMARY", "").strip())
+            if len(out) == limit:
+                break
+        return "\n\n".join(out)
+
+    def _topic_basis(self, question, context=None):
+        """Текст, за яким підбираються розділ знань з answers.md і приклади відповідей.
+        Для уточнення це питання, якого воно стосується: за словами самого уточнення
+        ("its parameters and how to use it") після питання про Prefab Variant
+        витягувався розділ про шейдери, і AI відповів про dot product."""
+        if _utterance_kind(question) != "more":
+            self._basis_q = question
+            return question
+        prev = context[0] if context else None
+        if prev and _utterance_kind(prev) != "more":
+            self._basis_q = prev
+        return self._basis_q or question
 
     def _how_to_plan(self, question, prepared):
         """Питають "як зробити", а готова відповідь - лише визначення ("What is X?").
@@ -474,14 +585,15 @@ class SuggestionProvider:
         Profile?") - не показувати, відповідає AI; None = нічого не міняти."""
         if prepared is None or not _wants_steps(question) or prepared[0].lower().startswith("how"):
             return None
-        topic = self._action_pick(question)
-        if topic < 0:
-            return None
         # ті самі слова в іншому порядку - інший зміст: "profile a build" не є "Build Profile"
         heard, known = _match_words(question), _match_words(prepared[0])
         common = [w for w in known if w in heard]
         if len(common) >= 2 and [w for w in heard if w in common] != common:
             return "drop"
+        topic = self._action_pick(question)
+        # теми кукбукса немає - визначення все одно лише початок відповіді на "як зробити"
+        if topic < 0:
+            return "glue"
         return "glue" if self._action_pick(prepared[0]) == topic else "drop"
 
     def _relevant_action(self, question, context=None):
@@ -494,10 +606,17 @@ class SuggestionProvider:
         if prev < 0 and self._last_action in self.actions:
             prev = self.actions.index(self._last_action)
         i = self._action_pick(question, prefer=prev)
-        # "How do you make a character wave while walking?" одразу після питання
-        # про шари аніматора: своєї теми немає, але це питання "як зробити" по ній
         low = question.lower()
-        if i < 0 and (_utterance_kind(question) == "more" or _REFERS_RE.search(low) or _wants_steps(low)):
+        if _utterance_kind(question) == "more":
+            # "Tell me more about its parameters": тема - попередня. Власну бере лише
+            # коли НАЗВАНО тему ("more about the Animator layers"); слово з дужок
+            # заголовка ("parameters" у темі про кнопки) тему не міняє
+            words = set(_merge_pairs(_action_words(question), self._action_vocab))
+            if i < 0 or not (words & self._action_keys[i][0]):
+                i = prev
+        elif i < 0 and (_REFERS_RE.search(low) or _wants_steps(low)):
+            # "How do you make a character wave while walking?" одразу після питання
+            # про шари аніматора: своєї теми немає, але це питання "як зробити" по ній
             i = prev
         return self.actions[i] if i >= 0 else None
 
@@ -518,7 +637,9 @@ class SuggestionProvider:
             scored.append((overlap, text))
         scored.sort(key=lambda x: x[0], reverse=True)
         out = ""
-        if self.info_about:
+        # ABOUT ME бачить AI лише коли питають про досвід: модель не може
+        # переказати роботу кандидата, якщо її не бачить
+        if self.info_about and self._personal:
             out += f"Candidate background (ABOUT ME):\n{self.info_about}\n\n"
         for _, text in scored[:max_sections]:
             if text:
@@ -693,6 +814,11 @@ class SuggestionProvider:
 
         # питання з кількох частин: готові відповіді на частини показуємо
         # одразу підряд, у AI йде лише те, на що готової немає
+        if (not definition and kind == "question" and _PERSONAL_RE.search(question.lower())
+                and self._relevant_action(question, context) is not None):
+            # "Have you worked with the Animator?": так чи ні одразу на стрічку,
+            # AI дописує лише про саму тему
+            definition = self._experience_opener(question)
         if definition:
             glued, rest = definition, [question]
         else:
@@ -850,7 +976,9 @@ class SuggestionProvider:
         try:
             # контекст: схожі prepared-відповіді кандидата (уже завантажені
             # при старті — читання файлу не витрачає час під час інтерв'ю)
-            examples = self._similar_prepared(question)
+            # уточнення бере знання і приклади за питанням, якого воно стосується
+            basis = self._topic_basis(question, context)
+            examples = self._similar_prepared(basis)
             examples_text = "\n\n".join(f"Q: {q}\nA: {a}" for q, a in examples)
             info_block = ""
             if self.info_text:
@@ -862,22 +990,31 @@ class SuggestionProvider:
             # (друге-третє "tell me more" підряд) тема, з якої вже відповідали
             action = self._relevant_action(question, context)
             self._last_action = action
-            steps = action is not None and _wants_steps(question)
+            style = _style_for(question, action is not None)
+            if style == STYLE_EXPERIENCE:
+                # про тему є кукбукс: AI розповідає лише про Unity, ABOUT ME не бачить,
+                # речення про роботу кандидата викидаються
+                self._personal = False
             max_words = _answer_words(" ".join(only) if only else question, action is not None)
             action_block = ""
             if action is not None:
                 print(f"[AI] cookbook topic: {action[0]}")
                 action_block = ACTION_NOTE + action[0] + "\n" + action[1] + "\n\n"
+                if style == STYLE_EXPERIENCE:
+                    related = self._related_summaries(action)
+                    if related:
+                        action_block += "Related topics, in short:\n" + related + "\n\n"
             if only:
                 # AI має бачити вже сказане: без цього він дописав "Yes, Bloom is a
                 # renderer feature" одразу після готової відповіді, де сказано навпаки
                 question += ("\n\nThe candidate has ALREADY said this, word for word: \"" + prefix.strip() + "\"\n"
                              "Treat it as true and never contradict it. Do not repeat it. "
                              "Continue the answer with ONLY this remaining part: " + " ".join(only))
-            system = SYSTEM_PROMPT_TEMPLATE.format(
-                max_words=max_words, style=STYLE_STEPS if steps else STYLE_PLAIN)
+            if self._personal:
+                style += " " + RULE_HONEST
+            system = SYSTEM_PROMPT_TEMPLATE.format(max_words=max_words, style=style)
             # з кукбуксом промпт уже великий: з answers.md досить однієї підтеми
-            info_block = self._relevant_info(question, max_sections=1 if action else 2)
+            info_block = self._relevant_info(basis, max_sections=1 if action else 2)
             messages = [
                 {"role": "system", "content": system},
                 {
