@@ -239,6 +239,140 @@ def test_how_to_without_a_cookbook_topic_still_gets_steps_after_the_definition(s
     assert sp._how_to_plan(q, sp._best_prepared(q)) == "glue"
 
 
+@pytest.mark.parametrize("heard", [
+    # Igor 2026-10-04: "they can ask about ANY parameter of the Animator or the Particle System".
+    # The definition of the whole component is not the answer to a question about one part of it
+    "What is the Emission module of a Particle System?",
+    "What are the parameters of a Particle System?",
+    "What settings does the Animator have?",
+    "What is the Shape module in the Particle System?",
+])
+def test_question_about_a_part_does_not_get_the_definition_of_the_whole(sp, heard):
+    assert sp._best_prepared(heard) is None
+
+
+@pytest.mark.parametrize("heard, want", [
+    # the part rule must not eat ordinary questions
+    ("What is a Particle System?", "What is a Particle System?"),
+    ("What is a pivot on a sprite?", "What is a Pivot?"),
+    ("So what is a component in unity?", "What is a Component?"),
+    ("What is an Addressables Label?", "What is an Addressables Label?"),
+    ("What is an Addressables group?", "What is an Addressables Group?"),
+    ("What is an Animator Parameter?", "What is an Animator Parameter?"),
+    ("How do Animator parameters work?", "How do Animator parameters work?"),
+    ("What is a Prefab Variant?", "What is a Prefab Variant?"),
+])
+def test_ordinary_questions_keep_their_prepared_answer(sp, heard, want):
+    hit = sp._best_prepared(heard)
+    assert hit is not None and hit[0] == want
+
+
+@pytest.mark.parametrize("heard, title", [
+    # the question names the component: its own field-by-field section must reach the AI
+    ("What is the Emission module of a Particle System?", "COMPONENT: PARTICLE SYSTEM"),
+    ("What are the parameters of a Particle System?", "COMPONENT: PARTICLE SYSTEM"),
+    ("What parameters does an Image have?", "COMPONENT: IMAGE:"),
+    ("What parameters are in a material?", "ASSETS: MATERIALS AND SHADERS:"),
+    ("What is Raycast Target on an Image?", "COMPONENT: IMAGE:"),
+    ("What settings does a Canvas Scaler have?", "COMPONENT: CANVAS SCALER:"),
+])
+def test_question_naming_a_component_gets_its_own_section(sp, heard, title):
+    sent = sp._relevant_info(heard)
+    bodies = [x for t, x in sp.info_sections if t.startswith(title) and x]
+    assert bodies and any(b.strip()[:80] in sent for b in bodies)
+
+
+def test_emission_question_gets_the_section_that_talks_about_emission(sp):
+    sent = sp._relevant_info("What is the Emission module of a Particle System?")
+    assert "Emission" in sent
+
+
+@pytest.mark.parametrize("heard, title", [
+    # a passing word in a LATER part of a compound question is not the topic:
+    # "for a 9-sliced button", "uses more memory", "all art"
+    ("Can you explain Sorting Layer and Order in Layer, and where a Sorting Group fits in?", None),
+    ("What is Tight Mesh, what is Full Rect, and which one would you use for a 9-sliced button?", None),
+    ("What is a pivot, what are Pixels Per Unit, and why should all art use the same value?", None),
+    ("What is transparency, what is alpha clipping, and does additive blending reduce overdraw?", None),
+    ("What is static batching, what is dynamic batching, and which one uses more memory?", None),
+    ("What is tweening, how is it different from the Animator, and which one would you use for a button press?", None),
+    # the first part names the topic
+    ("What is the Unity Profiler, what is the Frame Debugger, and when do you use each?", "UNITY PROFILER"),
+    ("What kinds of Animator parameters are there, and when do you use a trigger?", "ANIMATOR CONTROLLER"),
+    ("What does the SRP Batcher do, does it reduce draw calls, and how do you check it?", "URP CAMERA"),
+    ("How do you fix a memory leak, how do you find it, and how do you prove it is gone?", "MEMORY PROFILER"),
+    ("What are Animator layers?", "ANIMATOR LAYERS"),
+    ("What is a Sorting Layer?", None),
+])
+def test_compound_question_takes_its_topic_from_the_first_part(sp, heard, title):
+    sp._last_action = None
+    hit = sp._relevant_action(heard)
+    assert (hit[0] if hit else None) is None if title is None else hit and hit[0].startswith(title)
+
+
+@pytest.mark.parametrize("heard", [
+    "What is Any State in the Animator?",      # showed "What is an Animator State?"
+    "What Image Types are there?",             # showed "What is an Image?"
+])
+def test_named_part_does_not_get_the_definition_of_the_whole(sp, heard):
+    assert sp._best_prepared(heard) is None
+
+
+@pytest.mark.parametrize("heard, title", [
+    # the word "animation" alone names no cookbook topic: three topics carry it
+    ("What is Texture Sheet Animation in the Particle System?", None),
+    ("How do you make a dust effect for a building animation?", None),
+    ("What is an Animation Event?", "ANIMATION CURVES"),
+    ("How do you create a clip in the Animation window?", "ANIMATION WINDOW"),
+])
+def test_the_word_animation_alone_is_not_a_topic(sp, heard, title):
+    sp._last_action = None
+    hit = sp._relevant_action(heard)
+    assert (hit[0] if hit else None) is None if title is None else hit and hit[0].startswith(title)
+
+
+def test_plural_in_the_question_still_finds_the_component_section(sp):
+    body = [x for t, x in sp.info_sections if t == "COMPONENT: CANVAS:"][0]
+    assert body.strip()[:80] in sp._relevant_info("How do you split UI into Canvases?")
+
+
+@pytest.mark.parametrize("heard, prepared_q, want", [
+    # "have you used X" hits a prepared answer about X: yes or no still comes first
+    ("Have you used the Frame Debugger?", "What is the Frame Debugger?", SP.EXPERIENCE_YES),
+    ("Have you used the Memory Profiler?", "How do you use the Memory Profiler?", SP.EXPERIENCE_NO),
+    # not a question about experience: nothing is added
+    ("What is the Frame Debugger?", "What is the Frame Debugger?", ""),
+    # the prepared answer is itself about his experience: nothing is added
+    ("Have you ever missed a deadline?", "Have you ever missed a deadline?", ""),
+])
+def test_yes_or_no_goes_before_a_prepared_answer_too(sp, heard, prepared_q, want):
+    shown = sp._with_opener(heard, (prepared_q, "BODY"))
+    assert shown == (want + " BODY" if want else "BODY")
+
+
+def test_prepared_answers_do_not_carry_the_next_section_marker(sp):
+    # 18 answers ended with "--- HOW I WORK (...) ---" and that line went to the ribbon
+    assert [q for q, a in sp.prepared if "---" in a] == []
+
+
+def test_home_assignment_reaches_the_ai_only_when_asked(sp):
+    # voice run 2026-10-04: a general question about variants got "seven direct variants",
+    # a general question about a build flow got "a hammer sprite swings"
+    assert len(SP.HOME_QUESTIONS) >= 5
+    for general in ("How do you structure a base prefab and its variants?",
+                    "How do you make a buy, build and ready flow?"):
+        assert "seven direct variants" not in sp._relevant_info(general)
+        assert not any(q in SP.HOME_QUESTIONS for q, a in sp._similar_prepared(general))
+    asked = "Why did you structure the variants this way in your home assignment?"
+    assert "seven direct variants" in sp._relevant_info(asked)
+    assert any(q in SP.HOME_QUESTIONS for q, a in sp._similar_prepared(asked))
+
+
+def test_prompt_tells_the_ai_to_write_without_i():
+    assert "first person" not in SP.SYSTEM_PROMPT_TEMPLATE
+    assert "never use the words I" in SP.RULE_NO_I and "home assignment" in SP.RULE_NO_I
+
+
 def test_about_me_reaches_the_ai_only_for_experience_questions(sp):
     # the model cannot retell his work if it never sees it
     sp._personal = False

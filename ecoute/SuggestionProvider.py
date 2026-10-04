@@ -22,7 +22,7 @@ SYSTEM_PROMPT_TEMPLATE = (
     "You are helping a candidate during a live technical job interview (Unity / Technical Artist role). "
     "You receive the interviewer's latest spoken question, plus the candidate's background info "
     "and their own prepared answers for similar questions — "
-    "reuse their facts, style and tone (first person, confident, direct). "
+    "reuse their facts, style and tone (confident, direct). "
     "Reply in the SAME language as the question (English or Ukrainian). "
     "The answer must be about {max_words} words — a complete, confident reply that "
     "fully answers ALL parts of the question. "
@@ -69,6 +69,14 @@ RULE_HONEST = (
     "If the interviewer asks whether the candidate has used a tool or feature: say yes ONLY if the "
     "background info says so, otherwise say plainly that the candidate has not worked with it. "
     "Keep it to one short sentence about the candidate, with no story about a project."
+)
+# Ігор 2026-10-04: відповідь AI - лише про Unity, без "I". Не стосується питань
+# про досвід без теми кукбукса (там діє RULE_HONEST і мова якраз про кандидата)
+RULE_NO_I = (
+    "Talk about Unity, not about a person: never use the words I, my, me or we. "
+    "Say what is done in imperative or neutral form: 'First, select the panel', "
+    "'The anchors are set to stretch' - not 'First, I select the panel'. "
+    "Never mention the home assignment, the test task or its island unless the interviewer asks about it."
 )
 EXPERIENCE_WORDS = 120
 # так чи ні каже КОД за рядками ABOUT ME, а не AI: модель дописувала "a lot at
@@ -145,6 +153,43 @@ _PERSONAL_RE = re.compile(
     r"\b(your (own )?experience|experience (with|in)|have you (ever )?\w+|did you (ever )?\w+|"
     r"in your (work|projects?|last job|previous job|career)|at your (last|previous) job|"
     r"tell me about a time|what \w+ have you (made|done|built|used|written|shipped))\b")
+
+
+# питають про тестове завдання: лише тоді AI бачить його деталі. На загальні
+# питання він переказував "seven direct variants", "a hammer sprite swings"
+_HOME_RE = re.compile(
+    r"\b(home (assignment|test|task|work)|homework|test (task|assignment)|take[- ]home|"
+    r"your (island|assignment|submission|test)|tea house)\b")
+
+_TEST_LINE_RE = re.compile(r"\bin (the|my) test\b", re.I)
+
+# питають про ЧАСТИНУ компонента ("the Emission module of a Particle System",
+# "parameters of an Image"): визначення цілого - не відповідь
+_PIECE_RE = re.compile(
+    r"\b(modules?|parameters?|settings?|propert(?:y|ies)|fields?|options?|types?|kinds?|any state)\b")
+# ці слова є в кожному розділі: "parameters of a Particle System" тягло ANIMATION
+_PIECE_WORDS = {"module", "modules", "parameter", "parameters", "setting", "settings",
+                "property", "properties", "field", "fields", "option", "options"}
+
+# слова заголовка розділу знань, які не називають тему
+_TITLE_IGNORE = {"component", "assets", "asset", "project", "settings", "module", "modules",
+                 "main", "used", "didn", "questions", "about", "what", "most", "matters",
+                 "interview", "senior", "with", "every", "part"}
+
+
+def _singular(w):
+    """canvases -> canvas, atlases -> atlas, shaders -> shader; canvas і atlas не чіпає."""
+    if w.endswith("ses"):
+        return w[:-2]
+    if w.endswith("s") and not w.endswith(("ss", "as", "us", "is")):
+        return w[:-1]
+    return w
+
+
+def _title_words(title):
+    """Змістові слова заголовка розділу (до дужки), без множини."""
+    head = _normalize(title.split("(")[0])
+    return set(_singular(w) for w in head.split() if len(w) >= 4 and w not in _TITLE_IGNORE)
 
 
 # про гроші кандидат відповідає сам: AI вигадав "senior level market rate"
@@ -385,7 +430,14 @@ _ACTION_IGNORE = {"unity", "ui", "set", "up",
                   # дієслова питання, а не назва теми: "How do anchors WORK?"
                   "work", "make", "take", "add", "find", "get",
                   # "rect" є і в Full Rect, і в RectMask: саме по собі не Scroll Rect
-                  "rect"}
+                  "rect",
+                  # слова назви "COMMON RULES FOR ALL UI ELEMENTS", які тему не називають
+                  "all", "common", "rule", "rules", "element", "elements"}
+_WEAK_NAMES = {"animation"}
+# те саме слово, інше значення: шар сортування - не шар аніматора,
+# змішування прозорості - не Blend Tree
+_OTHER_MEANING_RE = re.compile(
+    r"\b(sorting layers?|order in layer|(alpha|additive|multiply) blend\w*|blend modes?)\b", re.I)
 
 
 def _action_words(text):
@@ -416,6 +468,10 @@ def _merge_pairs(words, vocab):
     return out
 
 
+# готові питання з розділу про тестове завдання (заповнює load_prepared_answers)
+HOME_QUESTIONS = set()
+
+
 def load_prepared_answers():
     pairs = []
     info_text = ""
@@ -430,9 +486,20 @@ def load_prepared_answers():
     m = re.search(r"\A(.*?)(?=^Q: )", content, flags=re.M | re.S)
     info_text = m.group(1).strip() if m else ""
     blocks = re.findall(r"Q:\s*(.*?)\nA:\s*(.*?)(?=\nQ:|\Z)", content, flags=re.S)
+    HOME_QUESTIONS.clear()
+    group = ""
     for q, a in blocks:
+        # рядок "--- НАЗВА РОЗДІЛУ ---" стоїть після відповіді й потрапляв у її
+        # текст (18 відповідей їхали на стрічку з назвою наступного розділу)
+        marker = re.search(r"^--- (.*?) ---\s*$", a, flags=re.M)
+        if marker:
+            a = a[:marker.start()]
         if q.strip() and a.strip():
             pairs.append((q.strip(), a.strip()))
+            if "HOME ASSIGNMENT" in group.upper():
+                HOME_QUESTIONS.add(q.strip())
+        if marker:
+            group = marker.group(1)
     print(f"[INFO] Loaded {len(pairs)} prepared answers from {config.ANSWERS_FILE}"
           + (f" (+ INFO block {len(info_text)} chars)" if info_text else ""))
     return pairs, info_text
@@ -515,6 +582,12 @@ class SuggestionProvider:
         ЗАГОЛОВКА: два слова з SUMMARY ("turn", "off") тягнули чужу тему.
         При рівному рахунку виграє тема, про яку вже говорили (prefer):
         "transition" є і в аніматорі, і в UI."""
+        # складене питання: тему називає ПЕРША частина, далі йдуть побіжні слова
+        # ("for a 9-sliced button" -> кнопки, "uses more memory" -> Memory Profiler)
+        compound = _question_parts(text) >= 2
+        if compound:
+            text = _split_parts(text)[0]
+        text = _OTHER_MEANING_RE.sub(" ", text)
         words = set(_merge_pairs(_action_words(text), self._action_vocab)) - _ACTION_IGNORE
         best_key, best = None, -1
         for i, (name, rest, summary) in enumerate(self._action_keys):
@@ -524,12 +597,16 @@ class SuggestionProvider:
             # "root" - у темі Animator, "content" - у Scroll Rect)
             if not (words & name) and len(words & rest) < 2:
                 continue
+            # "animation" є в назвах трьох тем: саме по собі тему не називає
+            # ("Texture Sheet Animation", "a building animation" -> Animation Window)
+            if words & name <= _WEAK_NAMES and len(words & (rest - name)) < 2:
+                continue
             key = (title, i == prefer, len(words & (summary - name - rest)))
             if best_key is None or key > best_key:
                 best_key, best = key, i
         # коротка назва з 2-3 слів має збігтися більше ніж наполовину: "Sorting
         # Layer" - не шари аніматора, "Content Size Fitter" - не RectTransform
-        if best >= 0 and len(words) <= 3:
+        if best >= 0 and len(words) <= 3 and not compound:
             name, rest, summary = self._action_keys[best]
             if 2 * len(words & (name | rest | summary)) <= len(words):
                 return -1
@@ -551,6 +628,15 @@ class SuggestionProvider:
             else:
                 used.append(line)
         return EXPERIENCE_YES if subject <= set(_match_words(" ".join(used))) else ""
+
+    def _with_opener(self, question, prepared):
+        """"Have you used the Frame Debugger?" влучає в готову відповідь "What is
+        the Frame Debugger?": спершу так чи ні, далі сама відповідь. Якщо готове
+        питання саме про досвід - у ньому вже все сказано."""
+        if not _PERSONAL_RE.search(question.lower()) or _PERSONAL_RE.search(prepared[0].lower()):
+            return prepared[1]
+        opener = self._experience_opener(question)
+        return (opener + " " + prepared[1]) if opener else prepared[1]
 
     def _related_summaries(self, action, limit=3):
         """SUMMARY сусідніх тем кукбукса (спільне слово в назві: Animator ->
@@ -627,11 +713,20 @@ class SuggestionProvider:
             return ""
         qn = _normalize(question)
         qwords = set(w for w in qn.split() if len(w) >= 4)
+        qnames = set(_singular(w) for w in qwords)
+        home = bool(_HOME_RE.search(question.lower()))
         scored = []
         for title, text in self.info_sections:
-            tn = _normalize(title + " " + text[:800])
+            if "HOME ASSIGNMENT" in title.upper() and not home:
+                continue
+            # питання НАЗИВАЄ розділ ("parameters of an Image" -> COMPONENT: IMAGE):
+            # це важить більше за будь-які спільні слова в тексті. Тоді текст
+            # розділу рахуємо весь - він розводить розділи з однаковою назвою
+            # (три розділи PARTICLE SYSTEM: в якому з них Emission)
+            named = len(qnames & _title_words(title))
+            tn = _normalize(title + " " + (text if named else text[:800]))
             twords = set(w for w in tn.split() if len(w) >= 4)
-            overlap = len(qwords & twords)
+            overlap = len(qwords & twords - _PIECE_WORDS) + 10 * named
             if overlap == 0:
                 overlap = difflib.SequenceMatcher(None, qn, _normalize(title)).ratio()
             scored.append((overlap, text))
@@ -642,6 +737,9 @@ class SuggestionProvider:
         if self.info_about and self._personal:
             out += f"Candidate background (ABOUT ME):\n{self.info_about}\n\n"
         for _, text in scored[:max_sections]:
+            if text and not home:
+                # рядки "In the test: ... seven direct variants" стоять і в загальних розділах
+                text = "\n".join(l for l in text.splitlines() if not _TEST_LINE_RE.search(l))
             if text:
                 out += text.strip() + "\n\n"
         return out
@@ -694,6 +792,10 @@ class SuggestionProvider:
             names = set(_merge_pairs(heard, self._action_vocab))
             if any(n and n <= names and n - best_ptok for n in self._action_names):
                 return None
+        # питають про частину ("the Emission module of a Particle System"), а
+        # prepared - визначення цілого ("What is a Particle System?")
+        if best_key[0] < 0.9 and _PIECE_RE.search(qn) and not _PIECE_RE.search(_normalize(best[0])):
+            return None
         # питають про ДОСВІД кандидата, а не про термін: "What shaders have you
         # made?" показувало визначення "What is a Shader?". Таке йде в AI з
         # фактами про кандидата, якщо немає готової відповіді саме на це питання
@@ -720,9 +822,11 @@ class SuggestionProvider:
     def _similar_prepared(self, question, k=3):
         """ТОП-k найближчих prepared-відповідей — контекст для AI."""
         qn = _normalize(question)
+        home = bool(_HOME_RE.search(question.lower()))
         scored = [
             (difflib.SequenceMatcher(None, qn, qnorm).ratio(), qorig, aorig)
             for qorig, aorig, qnorm, _, _ in self.prepared_norm
+            if home or qorig not in HOME_QUESTIONS
         ]
         scored.sort(key=lambda x: x[0], reverse=True)
         return [(q, a) for _, q, a in scored[:k]]
@@ -805,11 +909,12 @@ class SuggestionProvider:
         if how_to:
             prepared = None
         if prepared is not None:
-            print(f"[MATCH] fired prepared answer: {prepared[1]}")
+            shown = self._with_opener(question, prepared) if kind == "question" else prepared[1]
+            print(f"[MATCH] fired prepared answer: {shown}")
             # тема для наступних уточнень = тема ЦЬОГО питання (або жодної):
             # інакше "tell me more" після overdraw тягнуло б кукбукс про Canvas
             self._last_action = self._relevant_action(question)
-            self._set_text(display, prepared[1], restart=True)
+            self._set_text(display, shown, restart=True)
             return
 
         # питання з кількох частин: готові відповіді на частини показуємо
@@ -1012,6 +1117,8 @@ class SuggestionProvider:
                              "Continue the answer with ONLY this remaining part: " + " ".join(only))
             if self._personal:
                 style += " " + RULE_HONEST
+            elif not _HOME_RE.search(basis.lower()):
+                style += " " + RULE_NO_I
             system = SYSTEM_PROMPT_TEMPLATE.format(max_words=max_words, style=style)
             # з кукбуксом промпт уже великий: з answers.md досить однієї підтеми
             info_block = self._relevant_info(basis, max_sections=1 if action else 2)
