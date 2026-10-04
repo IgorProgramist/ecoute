@@ -799,7 +799,8 @@ class SuggestionProvider:
         order = {}
         for i, w in enumerate(heard):
             order.setdefault(w, i)
-        what_asked = "what" in qn.split()
+        # "how would you describe X" - теж прохання про визначення, хоч "what" і немає
+        what_asked = "what" in qn.split() or bool(_DESCRIBE_RE.search(question.lower()))
         best_key, best, best_ov, best_ptok = (0.0, 0.0, False, 0.0), None, 0, set()
         for qorig, aorig, qnorm, ptok, psq in self.prepared_norm:
             ov = len(qt & ptok)

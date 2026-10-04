@@ -276,6 +276,9 @@ def test_how_would_you_describe_is_not_a_how_to(heard, steps):
     ("How do you understand what a Shader is?", "What is a Shader?"),
     ("What is 9-slicing, in simple words?", "What is 9-slicing?"),
     ("How do you understand what a ScriptableObject is?", "What is a ScriptableObject?"),
+    # found by dry_wordings.py: no "what" in the question, "When do you use ..." won the tie
+    ("How would you describe a ScriptableObject?", "What is a ScriptableObject?"),
+    ("How would you describe Object Pooling?", "What is Object Pooling?"),
     ("Explain to me what the SRP Batcher is.", "What is the SRP Batcher?"),
     ("Describe what a Mask is in UI.", "What is a Mask?"),
     ("What is your understanding of GPU Instancing?", "What is GPU Instancing?"),
