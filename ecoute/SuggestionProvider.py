@@ -32,10 +32,31 @@ SYSTEM_PROMPT_TEMPLATE = (
     "info and prepared answers given to you. NEVER invent numbers, percentages, FPS values, "
     "project names or stories that are not written there — describe what was done and how, "
     "without made-up figures. "
+    "If the interviewer asks whether the candidate has used a tool or feature at work and the "
+    "background info does not say so, do NOT claim it: say plainly that it did not come up at work, "
+    "then explain in one or two sentences how it works. "
     "The question comes from speech recognition and may contain misheard words — "
     "answer about the closest real Unity term and never comment on the wording. "
-    "Do not use lists, headings or markdown — plain sentences only. "
+    "Sound like a person talking, not like a textbook: never use words like utilize, leverage, "
+    "furthermore, moreover, additionally, crucial, robust, seamless, ensure, essentially, "
+    "'it is worth noting', 'in order to'. "
+    "Do not say numbers or exact values unless the interviewer asks for a number. "
+    "Start straight with the answer: never open with Sure, Good question, Of course, Certainly "
+    "or 'To continue'. "
+    "{style} "
     "Output ONLY the answer text, nothing else."
+)
+STYLE_PLAIN = "Do not use lists, headings or markdown — plain sentences only."
+# "як це зробити": людина перелічує кроки словами, а не цифрами зі списку
+STYLE_STEPS = (
+    "The interviewer asks HOW to do it: answer as a few short spoken steps, each a plain sentence "
+    "that starts with First, Second, Third, Then or Finally. No digits, no bullet points, no markdown."
+)
+ACTION_NOTE = (
+    "Reference notes about this Unity topic. They describe how Unity works, NOT what the candidate "
+    "did — never turn them into a personal story. Take only the facts the question needs and say "
+    "them in your own simple spoken words. Never quote the notes and never mention notes, lessons "
+    "or videos:\n"
 )
 
 
@@ -186,6 +207,108 @@ def _max_words(question):
     return config.AI_MAX_WORDS + 20 * (min(_question_parts(question), 3) - 1)
 
 
+_STEPS_RE = re.compile(
+    r"\b(how (do|would|can|could|should|did) (you|i|we)\b|how to\b|what are the steps|"
+    r"step by step|walk me through|show me how)")
+
+
+def _wants_steps(question):
+    """"How do you set up a blend tree?" = просять кроки; "How does it work?" = ні."""
+    return bool(_STEPS_RE.search(question.lower()))
+
+
+def _answer_words(question, has_topic):
+    """Довжина AI-відповіді: коротко за замовчуванням, довше на "розкажи детальніше",
+    найдовше на "як це зробити" (кроки), якщо для теми є кукбукс."""
+    words = _max_words(question)
+    if has_topic and _wants_steps(question):
+        return words + 30
+    if _utterance_kind(question) == "more":
+        return words + 20   # "tell me more" чекає на розгорнуту відповідь
+    return words
+
+
+_BOOKISH_RE = re.compile(
+    r"\b(utili[sz]e\w*|leverag\w+|furthermore|moreover|additionally|crucial\w*|robust\w*|"
+    r"seamless\w*|ensur\w+|essentially|delve\w*|comprehensive\w*|facilitat\w+|plethora|"
+    r"it is worth noting|it is important to note|in order to|in conclusion)\b")
+# цифра в назві терміна - не число у відповіді
+_NAME_DIGITS_RE = re.compile(r"\b(?:[123]d|9[- ]slic\w+|unity \d+|etc2|astc)\b")
+_EXPERIENCE_RE = re.compile(
+    r"\b(?:in|on|at) my (?:last |previous |current |own )?(?:project|job|work|game|team|company|studio)s?\b|"
+    r"\bwhen i (?:was|worked)\b|\bi (?:once|recently|previously|personally)\b|"
+    r"\bi (?:did|built|made|shipped|profiled|optimized|baked|reduced|fixed|worked|used|"
+    r"implemented|created|wrote|set up|cut)\b|"
+    r"\bi(?:'ve| have) (?:used|worked|built|made|done|shipped|profiled|optimized|baked)\b")
+# так починає відповідь чат-бот, а не людина на співбесіді
+_OPENER_RE = re.compile(
+    r"^\W*(sure|good question|great question|of course|certainly|absolutely|to continue)\b")
+
+
+def _strip_opener(text):
+    """"Sure, let me go deeper..." -> "Let me go deeper...". Промпт це забороняє,
+    але модель усе одно так починала 2 відповіді з 33."""
+    m = re.match(r"\W*(?:sure|good question|great question|of course|certainly|absolutely)\b[\s,.!:;—–-]*",
+                 text, flags=re.I)
+    if not m:
+        return text
+    rest = text[m.end():]
+    return rest[:1].upper() + rest[1:]
+
+
+def answer_tells(text):
+    """Що у відповіді видає машину: 'opener' ("Sure.", "Good question."),
+    'bookish' (книжкові слова), 'number' (цифри),
+    'experience' (розповідь про власний досвід - звірити з ABOUT ME)."""
+    low = text.lower()
+    out = []
+    if _OPENER_RE.search(low):
+        out.append("opener")
+    if _BOOKISH_RE.search(low):
+        out.append("bookish")
+    if re.search(r"\d", _NAME_DIGITS_RE.sub("", low)):
+        out.append("number")
+    if _EXPERIENCE_RE.search(low):
+        out.append("experience")
+    return out
+
+
+def _split_sections(text):
+    """Ріже текст на підтеми: заголовок = рядок (не список з '-'), закінчений
+    на ':', до 80 символів. -> [(заголовок, текст)]"""
+    sections, title, lines = [], None, []
+    for line in text.splitlines():
+        stripped = line.strip()
+        if stripped.endswith(":") and len(stripped) <= 80 and not stripped.startswith("-"):
+            if title is not None:
+                sections.append((title, "\n".join(lines).strip()))
+            title, lines = stripped, []
+        else:
+            lines.append(line)
+    if title is not None:
+        sections.append((title, "\n".join(lines).strip()))
+    return sections
+
+
+def load_actions():
+    try:
+        with open(config.ACTIONS_FILE, encoding="utf-8") as f:
+            sections = _split_sections(f.read())
+    except FileNotFoundError:
+        print(f"[INFO] No cookbook file ({config.ACTIONS_FILE})")
+        return []
+    print(f"[INFO] Loaded {len(sections)} cookbook topics from {config.ACTIONS_FILE}")
+    return sections
+
+
+# питання про ТЕ, про що щойно говорили
+_REFERS_RE = re.compile(r"\b(it|that|this|they|them|one|there|those|these)\b")
+
+# слова, що є майже в кожній темі: самі по собі тему не вибирають
+# ("set": до нього зводиться і "Settings", яке стоїть у кожному SUMMARY)
+_ACTION_IGNORE = {"unity", "ui", "set", "up"}
+
+
 def _merge_pairs(words, vocab):
     """whisper пише "mip maps" / "sprite sheet", у файлі "Mipmap" / "spritesheet":
     сусідню пару зливаємо, якщо злите слово є серед слів prepared-питань."""
@@ -245,6 +368,7 @@ class SuggestionProvider:
             for q, a in self.prepared
         ]
         self._parse_info_sections()
+        self._load_actions()
         if self.enabled:
             self.client = OpenAI(
                 api_key=api_key,
@@ -263,22 +387,9 @@ class SuggestionProvider:
         """Ріже INFO на підтеми ОДИН раз при старті: заголовок = рядок
         (не список з '-'), закінчений на ':', до 80 символів."""
         self.info_about = ""
-        self.info_sections = []
+        self.info_sections = _split_sections(self.info_text or "")
         if not self.info_text:
             return
-        current_title, current_lines = None, []
-        for line in self.info_text.splitlines():
-            stripped = line.strip()
-            is_header = (stripped.endswith(":") and len(stripped) <= 80
-                         and not stripped.startswith("-"))
-            if is_header:
-                if current_title is not None:
-                    self.info_sections.append((current_title, "\n".join(current_lines).strip()))
-                current_title, current_lines = stripped, []
-            else:
-                current_lines.append(line)
-        if current_title is not None:
-            self.info_sections.append((current_title, "\n".join(current_lines).strip()))
         # ABOUT ME — окремо: він летить у промпт завжди (ідентичність кандидата)
         kept = []
         for t, x in self.info_sections:
@@ -287,6 +398,55 @@ class SuggestionProvider:
             else:
                 kept.append((t, x))
         self.info_sections = kept
+
+    def _load_actions(self):
+        """Кукбукс: для кожної теми слова назви (вага 3), слова з дужок заголовка
+        (вага 2) і слова з SUMMARY (вага 1). Текст уроку в рахунок не йде:
+        у 900 словах уроку є майже будь-яке слово."""
+        self.actions = load_actions()
+        self._last_action = None
+        keys = []
+        for title, body in self.actions:
+            name, _, rest = title.partition("(")
+            summary = body.split("LESSON", 1)[0]
+            keys.append((_match_words(name), _match_words(rest), _match_words(summary)))
+        self._action_vocab = set(w for k in keys for part in k for w in part)
+        self._action_keys = [
+            tuple(set(_merge_pairs(part, self._action_vocab)) for part in k) for k in keys]
+        self._action_names = [k[0] - _ACTION_IGNORE for k in self._action_keys]
+
+    def _action_pick(self, text, prefer=-1):
+        """-> індекс теми кукбукса для тексту або -1. Тему вибирає лише слово із
+        ЗАГОЛОВКА: два слова з SUMMARY ("turn", "off") тягнули чужу тему.
+        При рівному рахунку виграє тема, про яку вже говорили (prefer):
+        "transition" є і в аніматорі, і в UI."""
+        words = set(_merge_pairs(_match_words(text), self._action_vocab)) - _ACTION_IGNORE
+        best_key, best = None, -1
+        for i, (name, rest, summary) in enumerate(self._action_keys):
+            title = 3 * len(words & name) + 2 * len(words & (rest - name))
+            if not title:
+                continue
+            key = (title, i == prefer, len(words & (summary - name - rest)))
+            if best_key is None or key > best_key:
+                best_key, best = key, i
+        return best
+
+    def _relevant_action(self, question, context=None):
+        """Тема кукбукса для питання -> (заголовок, текст) або None.
+        Уточнення без власної теми ("tell me more", "how do you set it up",
+        "what can go wrong with it") бере тему, про яку говорили щойно."""
+        if not self.actions:
+            return None
+        prev = self._action_pick(context[0]) if context and context[0] else -1
+        if prev < 0 and self._last_action in self.actions:
+            prev = self.actions.index(self._last_action)
+        i = self._action_pick(question, prefer=prev)
+        # "How do you make a character wave while walking?" одразу після питання
+        # про шари аніматора: своєї теми немає, але це питання "як зробити" по ній
+        low = question.lower()
+        if i < 0 and (_utterance_kind(question) == "more" or _REFERS_RE.search(low) or _wants_steps(low)):
+            i = prev
+        return self.actions[i] if i >= 0 else None
 
     def _relevant_info(self, question, max_sections=2):
         """ABOUT ME завжди + 1-2 підтеми, найближчі до теми питання.
@@ -326,7 +486,7 @@ class SuggestionProvider:
         order = {}
         for i, w in enumerate(heard):
             order.setdefault(w, i)
-        best_key, best, best_ov = (0.0, 0.0, 0.0), None, 0
+        best_key, best, best_ov, best_ptok = (0.0, 0.0, 0.0), None, 0, set()
         for qorig, aorig, qnorm, ptok, psq in self.prepared_norm:
             ov = len(qt & ptok)
             f1 = 0.0
@@ -350,9 +510,16 @@ class SuggestionProvider:
             first = min((order[w] for w in qt & ptok), default=99)
             key = (round(score, 3), -first, ratio)
             if key > best_key:
-                best_key, best, best_ov = key, (qorig, aorig), ov
+                best_key, best, best_ov, best_ptok = key, (qorig, aorig), ov, ptok
         if best_key[0] < config.MATCH_THRESHOLD:
             return None
+        # почуте повністю називає тему кукбукса, а prepared-питання покриває лише
+        # її частину: "What are Animator layers?" показувало "What is an Animator?".
+        # Таке йде в AI з кукбуксом
+        if best_key[0] < 0.9:
+            names = set(_merge_pairs(heard, self._action_vocab))
+            if any(n and n <= names and n - best_ptok for n in self._action_names):
+                return None
         # питають про ДОСВІД кандидата, а не про термін: "What shaders have you
         # made?" показувало визначення "What is a Shader?". Таке йде в AI з
         # фактами про кандидата, якщо немає готової відповіді саме на це питання
@@ -451,6 +618,9 @@ class SuggestionProvider:
             prepared = None
         if prepared is not None:
             print(f"[MATCH] fired prepared answer: {prepared[1]}")
+            # тема для наступних уточнень = тема ЦЬОГО питання (або жодної):
+            # інакше "tell me more" після overdraw тягнуло б кукбукс про Canvas
+            self._last_action = self._relevant_action(question)
             self._set_text(display, prepared[1], restart=True)
             return
 
@@ -566,7 +736,8 @@ class SuggestionProvider:
                             r = not first_push_done[0]
                             first_push_done[0] = True
                             # prefix уже на стрічці: дописуємо, а не рестартуємо
-                            self._set_text(display, prefix + acc.replace("*", ""), restart=r and not prefix)
+                            self._set_text(display, prefix + _strip_opener(acc.replace("*", "")),
+                                           restart=r and not prefix)
                 if acc.strip():
                     box["a"] = acc.strip()
             except Exception as e:
@@ -616,23 +787,33 @@ class SuggestionProvider:
                     f"Candidate background info (facts you may use):\n"
                     f"{self.info_text}\n\n"
                 )
-            max_words = _max_words(" ".join(only) if only else question)
-            if _utterance_kind(question) == "more":
-                max_words += 20   # "tell me more" чекає на розгорнуту відповідь
+            # кукбукс: тема самого питання, далі тема попереднього питання, далі
+            # (друге-третє "tell me more" підряд) тема, з якої вже відповідали
+            action = self._relevant_action(question, context)
+            self._last_action = action
+            steps = action is not None and _wants_steps(question)
+            max_words = _answer_words(" ".join(only) if only else question, action is not None)
+            action_block = ""
+            if action is not None:
+                print(f"[AI] cookbook topic: {action[0]}")
+                action_block = ACTION_NOTE + action[0] + "\n" + action[1] + "\n\n"
             if only:
                 # AI має бачити вже сказане: без цього він дописав "Yes, Bloom is a
                 # renderer feature" одразу після готової відповіді, де сказано навпаки
                 question += ("\n\nThe candidate has ALREADY said this, word for word: \"" + prefix.strip() + "\"\n"
                              "Treat it as true and never contradict it. Do not repeat it. "
                              "Continue the answer with ONLY this remaining part: " + " ".join(only))
-            system = SYSTEM_PROMPT_TEMPLATE.format(max_words=max_words)
-            info_block = self._relevant_info(question)
+            system = SYSTEM_PROMPT_TEMPLATE.format(
+                max_words=max_words, style=STYLE_STEPS if steps else STYLE_PLAIN)
+            # з кукбуксом промпт уже великий: з answers.md досить однієї підтеми
+            info_block = self._relevant_info(question, max_sections=1 if action else 2)
             messages = [
                 {"role": "system", "content": system},
                 {
                     "role": "user",
                     "content": (
                         f"{info_block}"
+                        f"{action_block}"
                         f"Candidate's prepared answers for similar questions:\n"
                         f"{examples_text}\n\n"
                         f"{earlier}"
@@ -671,7 +852,7 @@ class SuggestionProvider:
                     # стрічка мовчить краще ніж покаже обірване слово
                     print("[AI] empty content (reasoning ate the token budget), skipping")
                     return
-            answer = answer.replace("*", "")
+            answer = _strip_opener(answer.replace("*", ""))
             if len(answer.split()) > max_words + 10:
                 # обрізаємо по ОСТАННЬОМУ ЗАВЕРШЕНОМУ реченню, не по слову
                 # (рубання по слову лишає "so it" замість відповіді)
