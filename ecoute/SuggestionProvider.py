@@ -123,6 +123,10 @@ _FILLER = {
     # прохання розповісти більше: саме по собі не тема
     "more", "detail", "details", "detailed", "elaborate", "deeper", "bit", "little",
     "go", "into", "give",
+    # обгортка питання "що таке X": "how do you understand what X is",
+    # "describe X", "X in your own words", "X in simple words", "as you see it"
+    "describe", "understand", "understanding", "understood", "own", "word", "words",
+    "simple", "simply", "see", "say", "think", "opinion",
 }
 
 # репліки-підтвердження: інтерв'юер не питає, а реагує на відповідь
@@ -295,9 +299,17 @@ _STEPS_RE = re.compile(
     r"step by step|walk me through|show me how)")
 
 
+# "how would you describe X", "how do you understand what X is" = це "що таке X"
+# іншими словами, а не "як це зробити"
+_DESCRIBE_RE = re.compile(
+    r"\bhow (do|would|can|could|should|did) (you|i|we) "
+    r"(describe|explain|define|understand|see|think|say|put)\b")
+
+
 def _wants_steps(question):
     """"How do you set up a blend tree?" = просять кроки; "How does it work?" = ні."""
-    return bool(_STEPS_RE.search(question.lower()))
+    low = question.lower()
+    return bool(_STEPS_RE.search(low)) and not _DESCRIBE_RE.search(low)
 
 
 # "чи працював ти з X": так чи ні каже код, AI розповідає лише про X. Раніше це
@@ -787,7 +799,8 @@ class SuggestionProvider:
         order = {}
         for i, w in enumerate(heard):
             order.setdefault(w, i)
-        best_key, best, best_ov, best_ptok = (0.0, 0.0, 0.0), None, 0, set()
+        what_asked = "what" in qn.split()
+        best_key, best, best_ov, best_ptok = (0.0, 0.0, False, 0.0), None, 0, set()
         for qorig, aorig, qnorm, ptok, psq in self.prepared_norm:
             ov = len(qt & ptok)
             f1 = 0.0
@@ -809,7 +822,10 @@ class SuggestionProvider:
             ratio = difflib.SequenceMatcher(None, qsq, psq).ratio()
             score = max(f1, ratio if ratio >= 0.9 else 0.0)
             first = min((order[w] for w in qt & ptok), default=99)
-            key = (round(score, 3), -first, ratio)
+            # рівний рахунок: питали "what ... is" - виграє визначення ("What is a
+            # ScriptableObject?"), а не "When do you use ScriptableObjects?"
+            same_kind = what_asked and qnorm.startswith("what")
+            key = (round(score, 3), -first, same_kind, ratio)
             if key > best_key:
                 best_key, best, best_ov, best_ptok = key, (qorig, aorig), ov, ptok
         if best_key[0] < config.MATCH_THRESHOLD:
@@ -833,7 +849,7 @@ class SuggestionProvider:
         # частина складного питання: одного спільного слова мало, якщо частина
         # не складається лише з нього ("what do you check first" -> "How did
         # you check it?" - хибно; "what is overdraw" -> Overdraw - вірно)
-        if part and best_ov < 2 and len(qt) != 1 and best_key[2] < 0.9:
+        if part and best_ov < 2 and len(qt) != 1 and best_key[3] < 0.9:
             return None
         # питання з 2-3 частин: одна prepared-відповідь закриває лише одну з них
         # (Prefab + Variant + "коли" -> показано тільки Variant). Таке йде в AI,

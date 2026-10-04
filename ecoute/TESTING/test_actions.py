@@ -251,6 +251,41 @@ def test_question_about_a_part_does_not_get_the_definition_of_the_whole(sp, hear
     assert sp._best_prepared(heard) is None
 
 
+@pytest.mark.parametrize("heard, steps", [
+    # voice run 2026-10-04: "how would you describe X" is "what is X", not "how to do it".
+    # The word "how" added a 90-105 word AI tail of steps to a plain definition
+    ("How would you describe anchors?", False),
+    ("How do you understand what an Animator Controller is?", False),
+    ("What is URP, how would you explain it?", False),
+    ("How would you define a draw call?", False),
+    ("How do you see the role of a Canvas?", False),
+    # real how-to questions still ask for steps
+    ("How do you set up anchors for different aspect ratios?", True),
+    ("How would you split Addressables groups?", True),
+    ("Walk me through setting up a Scroll Rect.", True),
+])
+def test_how_would_you_describe_is_not_a_how_to(heard, steps):
+    assert SP._wants_steps(heard) is steps
+
+
+@pytest.mark.parametrize("heard, want", [
+    # Igor 2026-10-04: "what is X" comes in many wordings; the wrapper words are not the topic
+    ("How would you describe anchors?", "What are Anchors?"),
+    ("What do you understand by batching?", "What is Batching?"),
+    ("What is a Material, in your own words?", "What is a Material?"),
+    ("How do you understand what a Shader is?", "What is a Shader?"),
+    ("What is 9-slicing, in simple words?", "What is 9-slicing?"),
+    ("How do you understand what a ScriptableObject is?", "What is a ScriptableObject?"),
+    ("Explain to me what the SRP Batcher is.", "What is the SRP Batcher?"),
+    ("Describe what a Mask is in UI.", "What is a Mask?"),
+    ("What is your understanding of GPU Instancing?", "What is GPU Instancing?"),
+    ("What does a Canvas mean to you?", "What is a Canvas?"),
+])
+def test_what_is_x_in_any_wording_finds_the_prepared_answer(sp, heard, want):
+    hit = sp._best_prepared(heard)
+    assert hit is not None and hit[0] == want
+
+
 @pytest.mark.parametrize("heard, want", [
     # the part rule must not eat ordinary questions
     ("What is a Particle System?", "What is a Particle System?"),

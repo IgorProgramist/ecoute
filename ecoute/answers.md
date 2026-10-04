@@ -850,8 +850,9 @@ A: A Blend Tree is a special Animator State that blends between multiple Animati
 Q: What is a Material?
 A: A Material is an asset that defines how an object looks when rendered, containing a Shader and values like color and textures.
 
+
 Q: What is a Shader?
-A: A Shader is a program that runs on the GPU and determines how pixels are calculated and displayed during rendering. It defines lighting, textures, transparency, and visual effects that create the final appearance.
+A: Shaders are scripts that contain the mathematical calculations and algorithms for calculating the color of each pixel rendered, based on the lighting input and the material configuration. A Shader is a program that runs on the GPU.
 
 Q: What is Shader Graph?
 A: Shader Graph is a visual node-based editor for creating Shaders without writing code. It allows artists to build complex materials through node connections with real-time preview.
@@ -1014,9 +1015,6 @@ A: Addressables remote content delivery means hosting asset bundles on a server 
 
 Q: What is RawImage?
 A: RawImage is a UI component that displays textures or render textures directly without using sprites or atlases. This is useful for dynamic content like downloaded images, video playback, or runtime-generated textures. RawImage is found under UI menu and accepts Texture or RenderTexture as source.
-
-Q: What is a Shaders?
-A: Shaders are scripts that contain the mathematical calculations and algorthms for calculating the color of each pixel rendered, based on the lighting  input and the material configuration.
 
 Q: What is stencil buffer?
 A: Stencil buffer is a GPU feature that masks rendering to specific screen areas using values instead of alpha blending.
