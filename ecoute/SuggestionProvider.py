@@ -28,6 +28,10 @@ SYSTEM_PROMPT_TEMPLATE = (
     "fully answers ALL parts of the question. "
     "Use SIMPLE everyday words and short clear sentences — the candidate reads it aloud fast. "
     "Avoid difficult vocabulary and abbreviations you can't say. "
+    "Facts about the candidate (companies, projects, dates, results) come ONLY from the background "
+    "info and prepared answers given to you. NEVER invent numbers, percentages, FPS values, "
+    "project names or stories that are not written there — describe what was done and how, "
+    "without made-up figures. "
     "The question comes from speech recognition and may contain misheard words — "
     "answer about the closest real Unity term and never comment on the wording. "
     "Do not use lists, headings or markdown — plain sentences only. "
@@ -75,6 +79,7 @@ _ACK = {
     "make", "sense", "right", "thank", "clear", "awesome", "correct", "exactly",
     "hmm", "mhm", "mm", "hm", "oh", "ah", "wow", "true", "agree", "agreed",
     "mmhmm", "mhmm", "mmm", "uhhuh", "uh", "huh", "yep", "yup", "aha", "noted",
+    "helpful", "useful", "very", "really", "much", "lot", "appreciate", "answer",
 }
 _MORE_RE = re.compile(
     r"\b(more|detail|details|elaborate|deeper|example|examples|why|expand|go on|continue|"
@@ -307,7 +312,10 @@ class SuggestionProvider:
             # слово названо першим: "component in Unity" -> Component, але
             # "has exit time" -/-> "What would you do with more time?"
             lone_tail = len(ptok) == 1 and len(qt) > 1 and ov and order[next(iter(qt & ptok))] != 0
-            if ov and not lone_tail and not (len(ptok) <= 3 and ov < len(ptok)):
+            # питають про РІЗНИЦЮ, а prepared — це визначення одного з двох:
+            # "difference between a Sprite Atlas and a spritesheet" -/-> Sprite Atlas
+            wants_diff = "difference" in qt and "difference" not in ptok
+            if ov and not lone_tail and not wants_diff and not (len(ptok) <= 3 and ov < len(ptok)):
                 recall, precision = ov / len(ptok), ov / len(qt)
                 f1 = 2 * precision * recall / (precision + recall)
             # майже дослівний повтор, стійкий до злитих/розбитих слів

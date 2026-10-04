@@ -52,6 +52,8 @@ def test_finds_the_right_prepared_answer(sp, heard, want):
     "What is your salary expectation?",
     # one word swapped in a short question = another topic (was answered as URP)
     "What is the built-in render pipeline?",
+    # asked for a difference: the definition of one of the two is not the answer
+    "What is the difference between a Sprite Atlas and a spritesheet?",
     # a prepared Q with one content word must not catch a question that only ends with it
     "Tell me about Has Exit Time.",
     "What is Has Exit Time?",
@@ -136,6 +138,7 @@ def test_only_the_part_without_a_prepared_answer_goes_to_ai(sp, monkeypatch):
 
 @pytest.mark.parametrize("heard, kind", [
     ("Okay.", "ack"), ("Great, thank you.", "ack"), ("I see, that makes sense.", "ack"),
+    ("Thank you, that was very helpful.", "ack"), ("MMHMM.", "ack"), ("Good answer, thanks a lot.", "ack"),
     ("Mm-hmm, good.", "ack"), ("Right, perfect.", "ack"),
     ("Tell me more.", "more"), ("Can you tell me more about that?", "more"),
     ("Can you elaborate?", "more"), ("Why?", "more"), ("Could you go into more detail?", "more"),
