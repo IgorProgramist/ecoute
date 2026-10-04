@@ -43,6 +43,8 @@ SYSTEM_PROMPT_TEMPLATE = (
     "furthermore, moreover, additionally, crucial, robust, seamless, ensure, essentially, "
     "'it is worth noting', 'in order to'. "
     "Do not say numbers or exact values unless the interviewer asks for a number. "
+    "Do not say names of functions or properties from code (like GetComponent or shortNameHash) — "
+    "describe in plain words what is done. Only SetTrigger, SetBool and SetFloat may be named. "
     "Start straight with the answer: never open with Sure, Good question, Of course, Certainly "
     "or 'To continue'. "
     "{style} "
@@ -245,7 +247,7 @@ _BOOKISH_RE = re.compile(
     r"seamless\w*|ensur\w+|essentially|delve\w*|comprehensive\w*|facilitat\w+|plethora|"
     r"it is worth noting|it is important to note|in order to|in conclusion)\b")
 # цифра в назві терміна - не число у відповіді
-_NAME_DIGITS_RE = re.compile(r"\b(?:[123]d|9[- ]slic\w+|unity \d+|etc2|astc)\b")
+_NAME_DIGITS_RE = re.compile(r"\b(?:[a-z]*[123]d|9[- ]slic\w+|unity \d+|etc2|astc)\b", re.I)
 _EXPERIENCE_RE = re.compile(
     r"\b(?:in|on|at) my (?:last |previous |current |own )?(?:project|job|work|game|team|company|studio)s?\b|"
     r"\bwhen i (?:was|worked)\b|\bi (?:once|recently|previously|personally)\b|"
@@ -268,6 +270,21 @@ def _strip_opener(text):
     return rest[:1].upper() + rest[1:]
 
 
+_PROJECT_RE = re.compile(
+    r"\b(?:in|on|at|from|for) my (?:\w+ ){0,3}(?:work|projects?|games?|job|team)\b", re.I)
+_SPINE_RE = re.compile(r"\bspine\b", re.I)
+
+
+def _strip_projects(text, personal):
+    """Викидає речення про проєкти кандидата, якщо про досвід не питали
+    (personal=False), і речення зі словом Spine - завжди. Промпт це забороняє,
+    але kimi-k3 дописав "In my slot game work, animations were ... Spine clips".
+    Якщо від відповіді нічого не лишається - повертає її як є."""
+    kept = [s for s in re.split(r"(?<=[.!?]) +", text)
+            if not _SPINE_RE.search(s) and (personal or not _PROJECT_RE.search(s))]
+    return " ".join(kept) if kept else text
+
+
 def answer_tells(text):
     """Що у відповіді видає машину: 'opener' ("Sure.", "Good question."),
     'bookish' (книжкові слова), 'number' (цифри),
@@ -278,7 +295,7 @@ def answer_tells(text):
         out.append("opener")
     if _BOOKISH_RE.search(low):
         out.append("bookish")
-    if re.search(r"\d", _NAME_DIGITS_RE.sub("", low)):
+    if re.search(r"\d", _NAME_DIGITS_RE.sub("", text)):
         out.append("number")
     if _EXPERIENCE_RE.search(low):
         out.append("experience")
@@ -387,6 +404,7 @@ class SuggestionProvider:
         ]
         self._parse_info_sections()
         self._load_actions()
+        self._personal = False
         if self.enabled:
             self.client = OpenAI(
                 api_key=api_key,
@@ -571,6 +589,12 @@ class SuggestionProvider:
         if best_key[0] < 0.9 and _question_parts(question) >= 2:
             return None
         return best
+
+    def _clean(self, text):
+        """Що з тексту AI йде на стрічку: без зірочок, без вступу чат-бота, без
+        речень про проєкти і Spine. Те саме для стріму і для фінального тексту -
+        інакше речення з'явилось би у стрімі й зникло наприкінці."""
+        return _strip_projects(_strip_opener(text.replace("*", "")), self._personal)
 
     def _similar_prepared(self, question, k=3):
         """ТОП-k найближчих prepared-відповідей — контекст для AI."""
@@ -782,8 +806,7 @@ class SuggestionProvider:
                             r = not first_push_done[0]
                             first_push_done[0] = True
                             # prefix уже на стрічці: дописуємо, а не рестартуємо
-                            self._set_text(display, prefix + _strip_opener(acc.replace("*", "")),
-                                           restart=r and not prefix)
+                            self._set_text(display, prefix + self._clean(acc), restart=r and not prefix)
                 if acc.strip():
                     box["a"] = acc.strip()
             except Exception as e:
@@ -814,6 +837,8 @@ class SuggestionProvider:
         на які ще треба відповісти (AI дописує їх після prefix);
         context = (попереднє питання, попередня відповідь на стрічці)."""
         prefix = (prefix + " ") if prefix else ""
+        # про досвід питали прямо - тоді проєкти кандидата у відповіді доречні
+        self._personal = bool(_PERSONAL_RE.search(question.lower()))
         earlier = ""
         if context and context[0] and context[1]:
             earlier = (
@@ -869,6 +894,8 @@ class SuggestionProvider:
             ]
             t0 = time.time()
             answer = self._stream_answer(messages, display, gen, prefix)
+            # стрім уже ВИВІВ початок цієї відповіді на стрічку
+            streamed = bool(answer)
             if not answer:
                 # стрім не дав контенту — повний запит як раніше
                 try:
@@ -898,7 +925,7 @@ class SuggestionProvider:
                     # стрічка мовчить краще ніж покаже обірване слово
                     print("[AI] empty content (reasoning ate the token budget), skipping")
                     return
-            answer = _strip_opener(answer.replace("*", ""))
+            answer = self._clean(answer)
             if len(answer.split()) > max_words + 10:
                 # обрізаємо по ОСТАННЬОМУ ЗАВЕРШЕНОМУ реченню, не по слову
                 # (рубання по слову лишає "so it" замість відповіді)
@@ -924,7 +951,10 @@ class SuggestionProvider:
             print("[AI] stale answer dropped (new question arrived)")
             return
 
-        self._set_text(display, prefix + answer, restart=not prefix)
+        # після стріму повний текст лише ДОПОВНЮЄ стрічку. Раніше він ішов як нова
+        # відповідь: стрім пушить раз на 0.25с, останні слова в пуш не потрапляли,
+        # повний текст відрізнявся від показаного - і стрічка їхала з початку
+        self._set_text(display, prefix + answer, restart=not prefix and not streamed)
 
     def _set_text(self, display, text, restart=False):
         self.last_shown_answer = text

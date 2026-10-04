@@ -51,7 +51,7 @@ ALWAYS_ON_TOP = True
 WINDOW_SIZE = "1000x240"
 
 # --- AI ПІДКАЗКИ (opencode Go) ---
-AI_MODEL = "glm-5.3-flash"      # альтернатива: glm-5.2, kimi-k3
+AI_MODEL = "kimi-k3"            # альтернатива: glm-5.2, glm-5.3-flash (було до 2026-10-04: 13.9с до першого слова, 3 відмови з 20)
 AI_MAX_TOKENS = 900             # reasoning моделі з'їдає токени — 400 обриває відповідь на півреченні
 AI_MAX_WORDS = 40               # ліміт слів у динамічній відповіді AI
 

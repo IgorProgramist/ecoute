@@ -116,6 +116,84 @@ def test_whisper_profile_for_profiler_still_finds_the_profiler(sp):
     assert topic(sp, "How do you profile a build?") == "UNITY PROFILER"
 
 
+@pytest.mark.parametrize("text, personal, want", [
+    # kimi-k3, 2026-10-04: the prompt forbids it, the model said it anyway
+    ("Blend Trees mix clips by a parameter. In my slot game work, animations were simple tweens "
+     "and Spine clips, so this was never needed.", False,
+     "Blend Trees mix clips by a parameter."),
+    ("Layers split the state machine. On my last project I used two layers.", False,
+     "Layers split the state machine."),
+    # the interviewer asked about experience: the candidate's work is the answer
+    ("Yes, I used it at work. In my slot projects it showed why batching broke.", True,
+     "Yes, I used it at work. In my slot projects it showed why batching broke."),
+    # Spine is never mentioned, even in an experience answer
+    ("Yes, I animated UI. I also used Spine for characters.", True, "Yes, I animated UI."),
+    # nothing to cut
+    ("Anchors pin the element to its parent.", False, "Anchors pin the element to its parent."),
+    # the whole answer would vanish: better the model's words than an empty ribbon
+    ("In my work I did this a lot.", False, "In my work I did this a lot."),
+])
+def test_project_and_spine_sentences_are_cut(text, personal, want):
+    assert SP._strip_projects(text, personal) == want
+
+
+def test_prompt_forbids_code_names():
+    prompt = SP.SYSTEM_PROMPT_TEMPLATE
+    assert "SetTrigger" in prompt and "function" in prompt.lower()
+
+
+class FakeRibbon:
+    def __init__(self):
+        self.calls = []
+
+    def start(self, text):
+        self.calls.append(("start", text))
+
+    def update_text(self, text):
+        self.calls.append(("update", text))
+
+    def after(self, _ms, fn, *args):
+        fn(*args)
+
+
+def test_streamed_answer_does_not_restart_the_ribbon_when_it_ends(sp, monkeypatch):
+    # Igor 2026-10-04: the ribbon reached the middle of an answer and started the
+    # same answer again. The stream showed the first words (START), then the final
+    # full text was sent as a NEW answer and the ribbon went back to the beginning
+    full = "Root motion is when the animation clip itself moves the character."
+    ribbon = FakeRibbon()
+
+    def fake_stream(messages, display, gen, prefix=""):
+        sp._set_text(display, "Root motion is", restart=True)
+        return full
+
+    monkeypatch.setattr(sp, "_stream_answer", fake_stream)
+    sp._gen += 1
+    sp._fetch("What is root motion?", ribbon, sp._gen)
+    assert [kind for kind, _ in ribbon.calls] == ["start", "update"]
+    assert ribbon.calls[-1] == ("update", full)
+
+
+def test_answer_without_a_stream_still_starts_the_ribbon(sp, monkeypatch):
+    full = "Root motion is when the animation clip itself moves the character and nothing else does."
+
+    class Msg:
+        content = full
+
+    class Choice:
+        message = Msg()
+
+    class Resp:
+        choices = [Choice()]
+
+    ribbon = FakeRibbon()
+    monkeypatch.setattr(sp, "_stream_answer", lambda *a, **k: None)
+    monkeypatch.setattr(sp, "_call_api", lambda *a, **k: Resp())
+    sp._gen += 1
+    sp._fetch("What is root motion?", ribbon, sp._gen)
+    assert ribbon.calls == [("start", full)]
+
+
 def test_how_to_right_after_a_topic_stays_on_it(sp):
     assert topic(sp, "How do you make a character wave while walking?",
                  ("What are Animator layers?", "x")) == "ANIMATOR LAYERS"
