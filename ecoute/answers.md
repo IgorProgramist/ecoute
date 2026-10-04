@@ -22,7 +22,7 @@ ABOUT ME (facts about me, use them in answers):
 - Addressables: I used Addressables at work in a production project.
 - Baked lighting: I baked lightmaps and used Light Probes at work, in the BotBusters project.
 - Not used at work: Memory Profiler, Profile Analyzer, Blend Trees, Animator layers. I roughly know how they work, the general things. If asked whether I used them, say that it did not come up at work.
-- Shaders: I have not written shader code by hand at work. I know how shaders work and the basics of Shader Graph. Never say that I write HLSL or shader code by hand.
+- Shaders: I have not written shader code by hand at work. I made shaders with the help of AI. I know how shaders work. Never say that I write HLSL or shader code by hand.
 
 UNITY KNOWLEDGE (facts, in simple words):
 
@@ -1014,6 +1014,9 @@ A: Addressables remote content delivery means hosting asset bundles on a server 
 
 Q: What is RawImage?
 A: RawImage is a UI component that displays textures or render textures directly without using sprites or atlases. This is useful for dynamic content like downloaded images, video playback, or runtime-generated textures. RawImage is found under UI menu and accepts Texture or RenderTexture as source.
+
+Q: What is a Shaders?
+A: Shaders are scripts that contain the mathematical calculations and algorthms for calculating the color of each pixel rendered, based on the lighting  input and the material configuration.
 
 Q: What is stencil buffer?
 A: Stencil buffer is a GPU feature that masks rendering to specific screen areas using values instead of alpha blending.

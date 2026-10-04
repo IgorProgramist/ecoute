@@ -350,6 +350,46 @@ def test_yes_or_no_goes_before_a_prepared_answer_too(sp, heard, prepared_q, want
     assert shown == (want + " BODY" if want else "BODY")
 
 
+@pytest.mark.parametrize("heard", [
+    # voice run 2026-10-04: both showed the home-assignment answer "I tested two screen
+    # sizes (1080x2400...)" - the tail "what do you check" hit "How did you check it?"
+    "A sprite looks blurry on the device, what do you check?",
+    "An object is pink in the build, what do you check?",
+])
+def test_tail_of_a_question_does_not_pull_a_home_assignment_answer(sp, heard):
+    assert sp._tail_prepared(heard) is None
+
+
+def test_tail_of_a_question_still_finds_an_ordinary_answer(sp):
+    assert sp._tail_prepared("Let's talk about UI, what is a Canvas?")[0] == "What is a Canvas?"
+
+
+def test_short_follow_up_with_it_keeps_the_previous_question(sp):
+    # "What can go wrong with it?" after anchors was answered about sprite import
+    prev = "How do you set up anchors for different aspect ratios?"
+    basis = sp._topic_basis("What can go wrong with it?", (prev, "First, decide..."))
+    assert prev in basis
+    # a long question with "it" inside is its own subject
+    own = "What is a Prefab and why do we use it in a big project with many artists?"
+    assert sp._topic_basis(own, (prev, "First, decide...")) == own
+
+
+@pytest.mark.parametrize("heard, style", [
+    # no cookbook about particles, Addressables or Shader Graph: the AI wrote the yes itself
+    # and invented "I use it for shine, glow or water"
+    ("Have you worked with the Particle System?", "experience"),
+    ("Have you worked with Shader Graph?", "experience"),
+    ("Have you used Addressables?", "experience"),
+    # a question about what he did stays a question about him
+    ("What shaders have you made?", "plain"),
+    ("Tell me about a time you fixed a performance problem.", "plain"),
+])
+def test_have_you_worked_with_it_needs_no_cookbook(heard, style):
+    want = SP.STYLE_EXPERIENCE if style == "experience" else SP.STYLE_PLAIN
+    assert SP._style_for(heard, False) == want
+    assert (SP._answer_words(heard, False) == SP.EXPERIENCE_WORDS) == (style == "experience")
+
+
 def test_prepared_answers_do_not_carry_the_next_section_marker(sp):
     # 18 answers ended with "--- HOW I WORK (...) ---" and that line went to the ribbon
     assert [q for q, a in sp.prepared if "---" in a] == []
@@ -419,6 +459,28 @@ def test_streamed_answer_does_not_restart_the_ribbon_when_it_ends(sp, monkeypatc
     sp._fetch("What is root motion?", ribbon, sp._gen)
     assert [kind for kind, _ in ribbon.calls] == ["start", "update"]
     assert ribbon.calls[-1] == ("update", full)
+
+
+def test_long_answer_is_never_cut(sp, monkeypatch):
+    # Igor 2026-10-04: "40 words is a wish, not a rule, answers must never be cut".
+    # "What Image Types are there?" said "four image types" and showed three: the code
+    # dropped the last sentence because the answer was longer than the limit plus ten
+    full = " ".join("Sentence number %d has exactly seven words here." % i for i in range(12))
+    assert len(full.split()) > SP._answer_words("What Image Types are there?", False) + 10
+    ribbon = FakeRibbon()
+    monkeypatch.setattr(sp, "_stream_answer", lambda messages, display, gen, prefix="": full)
+    sp._gen += 1
+    sp._fetch("What Image Types are there?", ribbon, sp._gen)
+    assert ribbon.calls[-1][1] == full
+
+
+def test_prompt_still_asks_for_a_short_answer():
+    # Igor 2026-10-04: "I wrote not to cut, not to make the answers as big as possible".
+    # Softening the prompt to "a wish, not a limit" gave 140-209 words; the prompt keeps
+    # the firm word count, only the cutting in code is gone
+    prompt = SP.SYSTEM_PROMPT_TEMPLATE
+    assert "must be about {max_words} words" in prompt
+    assert "wish" not in prompt
 
 
 def test_answer_without_a_stream_still_starts_the_ribbon(sp, monkeypatch):

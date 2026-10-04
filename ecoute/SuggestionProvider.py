@@ -300,11 +300,23 @@ def _wants_steps(question):
     return bool(_STEPS_RE.search(question.lower()))
 
 
+# "чи працював ти з X": так чи ні каже код, AI розповідає лише про X. Раніше це
+# діяло тільки для тем із кукбукса; без нього AI сам писав "Yes... I use it for
+# shine, glow or water" (Particle System, Addressables, Shader Graph)
+_WORKED_RE = re.compile(
+    r"\b(have|did) you (ever )?(worked with|work with|used|use|tried|try|baked|bake) ")
+
+
+def _asks_if_worked(question, has_topic):
+    low = question.lower()
+    return bool(_PERSONAL_RE.search(low)) and (has_topic or bool(_WORKED_RE.search(low)))
+
+
 def _answer_words(question, has_topic):
     """Довжина AI-відповіді: коротко за замовчуванням, довше на "розкажи детальніше",
     найдовше на "як це зробити" (кроки), якщо для теми є кукбукс."""
     words = _max_words(question)
-    if has_topic and _PERSONAL_RE.search(question.lower()):
+    if _asks_if_worked(question, has_topic):
         return EXPERIENCE_WORDS
     if has_topic and _wants_steps(question):
         return words + 30
@@ -318,7 +330,7 @@ def _answer_words(question, has_topic):
 def _style_for(question, has_topic):
     """Як AI має будувати відповідь: розповідь по суміжних темах на "чи працював
     ти з X", кроки на "як зробити", інакше звичайні речення."""
-    if has_topic and _PERSONAL_RE.search(question.lower()):
+    if _asks_if_worked(question, has_topic):
         return STYLE_EXPERIENCE
     if has_topic and _wants_steps(question):
         return STYLE_STEPS
@@ -629,6 +641,17 @@ class SuggestionProvider:
                 used.append(line)
         return EXPERIENCE_YES if subject <= set(_match_words(" ".join(used))) else ""
 
+    def _tail_prepared(self, question):
+        """"Let's talk about UI, what is a Canvas?" -> готова відповідь на саме питання
+        без вступу. Відповідь про тестове завдання так не береться: хвіст "what do
+        you check?" після "A sprite looks blurry on the device" влучав у "How did
+        you check it?" і показував розміри екранів із тестового."""
+        tail = _split_lead_in(question)
+        hit = self._best_prepared(tail) if tail else None
+        if hit and hit[0] in HOME_QUESTIONS and not _HOME_RE.search(question.lower()):
+            return None
+        return hit
+
     def _with_opener(self, question, prepared):
         """"Have you used the Frame Debugger?" влучає в готову відповідь "What is
         the Frame Debugger?": спершу так чи ні, далі сама відповідь. Якщо готове
@@ -656,10 +679,16 @@ class SuggestionProvider:
         Для уточнення це питання, якого воно стосується: за словами самого уточнення
         ("its parameters and how to use it") після питання про Prefab Variant
         витягувався розділ про шейдери, і AI відповів про dot product."""
+        prev = context[0] if context else None
         if _utterance_kind(question) != "more":
+            # коротке уточнення з "it" ("What can go wrong with it?") без власної теми:
+            # знання беремо за попереднім питанням разом із цим
+            if (prev and len(question.split()) <= 8 and _REFERS_RE.search(question.lower())
+                    and self._action_pick(question) < 0 and self._best_prepared(question) is None):
+                self._basis_q = prev
+                return prev + " " + question
             self._basis_q = question
             return question
-        prev = context[0] if context else None
         if prev and _utterance_kind(prev) != "more":
             self._basis_q = prev
         return self._basis_q or question
@@ -891,9 +920,7 @@ class SuggestionProvider:
         if prepared is None and kind == "question" and _question_parts(question) == 1:
             # вступ перед питанням: "Let's talk about UI, what is a Canvas?" —
             # слова вступу заважають збігу, тому пробуємо саме питання без нього
-            tail = _split_lead_in(question)
-            if tail:
-                prepared = self._best_prepared(tail)
+            prepared = self._tail_prepared(question)
         if prepared is not None and prepared[1] == self.last_shown_answer:
             same_q = difflib.SequenceMatcher(
                 None, _normalize(prev_q or ""), _normalize(question)).ratio() >= 0.85
@@ -919,8 +946,8 @@ class SuggestionProvider:
 
         # питання з кількох частин: готові відповіді на частини показуємо
         # одразу підряд, у AI йде лише те, на що готової немає
-        if (not definition and kind == "question" and _PERSONAL_RE.search(question.lower())
-                and self._relevant_action(question, context) is not None):
+        if (not definition and kind == "question"
+                and _asks_if_worked(question, self._relevant_action(question, context) is not None)):
             # "Have you worked with the Animator?": так чи ні одразу на стрічку,
             # AI дописує лише про саму тему
             definition = self._experience_opener(question)
@@ -1169,17 +1196,9 @@ class SuggestionProvider:
                     # стрічка мовчить краще ніж покаже обірване слово
                     print("[AI] empty content (reasoning ate the token budget), skipping")
                     return
+            # відповідь НЕ обрізається (Ігор 2026-10-04): кількість слів - побажання для
+            # AI, а не правило. Обрізання по реченню з'їло четвертий тип Image
             answer = self._clean(answer)
-            if len(answer.split()) > max_words + 10:
-                # обрізаємо по ОСТАННЬОМУ ЗАВЕРШЕНОМУ реченню, не по слову
-                # (рубання по слову лишає "so it" замість відповіді)
-                out = ""
-                for part in re.split(r"(?<=[.!?]) +", answer):
-                    if len((out + " " + part).split()) > max_words + 10:
-                        break
-                    out = (out + " " + part).strip()
-                if out:
-                    answer = out
             print(f"[AI] latency {time.time() - t0:.1f}s, words {len(answer.split())}")
             if answer:
                 print(f"[AI] dynamic answer: {answer}")
