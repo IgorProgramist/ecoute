@@ -20,7 +20,7 @@ ABOUT ME (facts about me, use them in answers):
 - Performance work I really did at work: assembled and optimized atlases, split and cleaned up Canvas and UI, set texture sizes and compression. Talk only about these when asked about my optimization experience.
 - I profiled games on a real Android phone connected by USB: a Development Build with Autoconnect Profiler, and the Profiler window in the Editor attached to the phone. I also used the Frame Debugger.
 - Addressables: I used Addressables at work in a production project.
-- Baked lighting: I baked lightmaps and used Light Probes at work.
+- Baked lighting: I baked lightmaps and used Light Probes at work, in the BotBusters project.
 - Not used at work: Memory Profiler, Profile Analyzer, Blend Trees, Animator layers. I roughly know how they work, the general things. If asked whether I used them, say that it did not come up at work.
 - Shaders: I have not written shader code by hand at work. I know how shaders work and the basics of Shader Graph. Never say that I write HLSL or shader code by hand.
 
@@ -1789,35 +1789,3 @@ A: Opening a project in an older Unity version is usually not safe. I would chec
 
 Q: What makes a useful Technical Art test?
 A: I like tests that check our own project rules, not Unity itself: asset links, scene structure, animation data, Addressables setup, or what an editor tool produces. The goal is to catch production mistakes automatically - not to test if Unity's Animator works.
-
---- BEHAVIOURAL QUESTIONS (STAR) ---
-
-Q: How do you report a bug so it is easy to fix?
-A: I give clear reproduction steps, the expected and actual result, the device and build version, and a screenshot or video. If there is a useful log or stack trace, I include that too.
-
-Q: How do you estimate a task you have not done before?
-A: I break it into small parts and first prototype the riskiest part. Then I give a range, not one number - the low end if everything goes smoothly, the high end if it gets complicated. I update the estimate when I learn more.
-
-Q: What if you find a bug in someone else's system close to release?
-A: I tell the owner right away, with steps to repeat it and proof. I suggest a fix if I have one. I don't quietly overwrite their work - we agree on the fix, and if I'm the right person to do it, I help.
-
-Q: What if the deadline cannot be met?
-A: I say it as soon as I know, not on the day of release. I tell the team what can be done by the date and what has to move. I'd rather agree on a smaller scope than knowingly ship a broken release.
-
-Q: How would you convince an artist to change their workflow?
-A: I show the problem on a real phone, so it's real to them. Then I give them a tool or a preset that makes the new way easy. I also let them try it on a real asset, so they can see whether it actually makes their work easier. If it's more work for them, they won't use it, so I make it simpler.
-
-Q: What would you improve first in a new project pipeline?
-A: I wouldn't redesign anything in the first weeks - first I need to understand why the pipeline works the way it does. Then I pick the thing that wastes the most time for the team. I make a small safe change and measure if it really helps.
-
-Q: How do you hand over a feature?
-A: I write a short note: what the feature does, how it's built, how to change it, and what it doesn't do. I also leave the prefab, settings and any small tools or notes in a state where another person can continue without asking me about every detail.
-
-Q: What would you do in your first week on this project?
-A: Build and run the project to see how it plays. Read the pipeline docs. Look at how existing features are built. Then take a small real task. I ask questions early instead of guessing and getting stuck.
-
-Q: What does "production-ready" mean for a feature?
-A: It works on the phones we target and fits the frame and memory budget. It handles all the states and edge cases without crashing. It also fits the project's loading, build and content pipeline, not just the scene itself. It's tested and reviewed, and another person can understand and maintain it without depending on knowledge that lives only in my head.
-
-Q: How do you verify it's tested enough?
-A: I check that the important paths are covered - the normal flow, edge cases and error states. Then I run it on the target phones and play a few longer sessions to see if anything breaks.

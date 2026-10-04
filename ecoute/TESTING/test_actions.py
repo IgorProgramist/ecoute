@@ -80,6 +80,42 @@ def test_follow_up_takes_topic_from_previous_question(sp, heard, prev_q, want):
     assert topic(sp, heard, (prev_q, "some answer")) == want
 
 
+@pytest.mark.parametrize("heard, want", [
+    ("What is your salary expectation?", True),
+    ("What are your salary expectations for this role?", True),
+    ("How much do you want to earn?", True),
+    ("What compensation are you looking for?", True),
+    ("How much memory does a texture use?", False),
+    ("What is a Blend Tree?", False),
+])
+def test_money_question_is_left_to_the_candidate(heard, want):
+    assert SP._is_money_question(heard) is want
+
+
+@pytest.mark.parametrize("heard, want", [
+    # sound run 3: a "how do you" question got only the definition of the thing
+    ("How do you set up a Scroll Rect?", "glue"),
+    # ... or the definition of a DIFFERENT thing: same words, other order
+    # ("What is a Build Profile?", "What is an Animator State?")
+    ("How do you profile a build?", "drop"),
+    ("How do you check which state the Animator is in?", "drop"),
+    # not a how-to, or the prepared question is itself the how-to: leave it alone
+    ("What is a Scroll Rect?", None),
+    ("How do you profile a game on a real phone?", None),
+    # the prepared answer says what the two mean; the AI adds how to tell them apart
+    ("How do you know if it is CPU bound or GPU bound?", "glue"),
+])
+def test_how_to_question_does_not_stop_at_a_definition(sp, heard, want):
+    assert sp._how_to_plan(heard, sp._best_prepared(heard)) == want
+
+
+def test_whisper_profile_for_profiler_still_finds_the_profiler(sp):
+    # heard "What is the Unity Profile?": the follow-up got the Profile Analyzer cookbook
+    assert topic(sp, "Tell me more.", ("What is the Unity Profile?", "x")) == "UNITY PROFILER"
+    assert topic(sp, "What is the Profile Analyzer?") == "PROFILE ANALYZER"
+    assert topic(sp, "How do you profile a build?") == "UNITY PROFILER"
+
+
 def test_how_to_right_after_a_topic_stays_on_it(sp):
     assert topic(sp, "How do you make a character wave while walking?",
                  ("What are Animator layers?", "x")) == "ANIMATOR LAYERS"

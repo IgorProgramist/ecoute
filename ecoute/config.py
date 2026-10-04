@@ -26,7 +26,8 @@ WHISPER_PROMPT = (
     "Renderer Features, MeshRenderer, SkinnedMeshRenderer, Render Texture, VFX Graph, overdraw, fill rate, "
     "alpha clipping, draw call, SRP Batcher, GPU Instancing, CPU-bound, GPU-bound, Frame Debugger, mipmap, "
     "Read/Write Enabled, LOD, Addressables Group, Addressables Catalog, Addressables Label, AssetBundle, "
-    "object pooling, Development Build, Build Profile, Bloom."
+    "object pooling, Development Build, Build Profile, Bloom, Culling Mode, occlusion culling, "
+    "Has Exit Time, Avatar Mask, Light Probes, Profile Analyzer, Memory Profiler."
 )
 
 # --- ТЕЛЕСУФЛЕР (безкінечна стрічка) ---

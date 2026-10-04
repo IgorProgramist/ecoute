@@ -32,6 +32,8 @@ SYSTEM_PROMPT_TEMPLATE = (
     "info and prepared answers given to you. NEVER invent numbers, percentages, FPS values, "
     "project names or stories that are not written there — describe what was done and how, "
     "without made-up figures. "
+    "Do not bring up the candidate's projects, games or past work, and do not give examples "
+    "'from my project', unless the interviewer asks about experience. Explain how the thing works. "
     "If the interviewer asks whether the candidate has used a tool or feature at work and the "
     "background info does not say so, do NOT claim it: say plainly that it did not come up at work, "
     "then explain in one or two sentences how it works. "
@@ -117,6 +119,16 @@ _PERSONAL_RE = re.compile(
     r"\b(your (own )?experience|experience (with|in)|have you (ever )?\w+|did you (ever )?\w+|"
     r"in your (work|projects?|last job|previous job|career)|at your (last|previous) job|"
     r"tell me about a time|what \w+ have you (made|done|built|used|written|shipped))\b")
+
+
+# про гроші кандидат відповідає сам: AI вигадав "senior level market rate"
+_MONEY_RE = re.compile(
+    r"\b(salary|salaries|compensation|pay (range|expectations?)|expected pay|rate expectations?|"
+    r"how much (do|would|did) you (want|expect|earn|make|charge))\b")
+
+
+def _is_money_question(text):
+    return bool(_MONEY_RE.search(text.lower()))
 
 
 def _utterance_kind(text):
@@ -309,6 +321,12 @@ _REFERS_RE = re.compile(r"\b(it|that|this|they|them|one|there|those|these)\b")
 _ACTION_IGNORE = {"unity", "ui", "set", "up"}
 
 
+def _action_words(text):
+    """Слова для вибору теми кукбукса. whisper чує "Unity Profile" замість
+    "Profiler" - для тем це одне слово."""
+    return [_stem("profile") if w == "profiler" else w for w in _match_words(text)]
+
+
 def _merge_pairs(words, vocab):
     """whisper пише "mip maps" / "sprite sheet", у файлі "Mipmap" / "spritesheet":
     сусідню пару зливаємо, якщо злите слово є серед слів prepared-питань."""
@@ -409,7 +427,7 @@ class SuggestionProvider:
         for title, body in self.actions:
             name, _, rest = title.partition("(")
             summary = body.split("LESSON", 1)[0]
-            keys.append((_match_words(name), _match_words(rest), _match_words(summary)))
+            keys.append((_action_words(name), _action_words(rest), _action_words(summary)))
         self._action_vocab = set(w for k in keys for part in k for w in part)
         self._action_keys = [
             tuple(set(_merge_pairs(part, self._action_vocab)) for part in k) for k in keys]
@@ -420,7 +438,7 @@ class SuggestionProvider:
         ЗАГОЛОВКА: два слова з SUMMARY ("turn", "off") тягнули чужу тему.
         При рівному рахунку виграє тема, про яку вже говорили (prefer):
         "transition" є і в аніматорі, і в UI."""
-        words = set(_merge_pairs(_match_words(text), self._action_vocab)) - _ACTION_IGNORE
+        words = set(_merge_pairs(_action_words(text), self._action_vocab)) - _ACTION_IGNORE
         best_key, best = None, -1
         for i, (name, rest, summary) in enumerate(self._action_keys):
             title = 3 * len(words & name) + 2 * len(words & (rest - name))
@@ -430,6 +448,23 @@ class SuggestionProvider:
             if best_key is None or key > best_key:
                 best_key, best = key, i
         return best
+
+    def _how_to_plan(self, question, prepared):
+        """Питають "як зробити", а готова відповідь - лише визначення ("What is X?").
+        'glue' = показати визначення одразу, AI дописує кроки з кукбукса;
+        'drop' = визначення про ІНШУ тему ("profile a build" -> "What is a Build
+        Profile?") - не показувати, відповідає AI; None = нічого не міняти."""
+        if prepared is None or not _wants_steps(question) or prepared[0].lower().startswith("how"):
+            return None
+        topic = self._action_pick(question)
+        if topic < 0:
+            return None
+        # ті самі слова в іншому порядку - інший зміст: "profile a build" не є "Build Profile"
+        heard, known = _match_words(question), _match_words(prepared[0])
+        common = [w for w in known if w in heard]
+        if len(common) >= 2 and [w for w in heard if w in common] != common:
+            return "drop"
+        return "glue" if self._action_pick(prepared[0]) == topic else "drop"
 
     def _relevant_action(self, question, context=None):
         """Тема кукбукса для питання -> (заголовок, текст) або None.
@@ -596,6 +631,10 @@ class SuggestionProvider:
             # "Okay, great, thank you": раніше це йшло в AI і збивало стрічку
             print("[MATCH] acknowledgement ignored")
             return
+        if _is_money_question(question) and self._best_prepared(question) is None:
+            # початок рядка той самий, що в підтвердження: тест-ранер читає його як "ignored"
+            print("[MATCH] acknowledgement ignored (money question - the candidate answers himself)")
+            return
         # що було сказано до цього: AI потрібне для "tell me more" / "why?"
         context = (self._prev_fired_q, self.last_shown_answer)
         prev_q, self._prev_fired_q = self._prev_fired_q, question
@@ -616,6 +655,10 @@ class SuggestionProvider:
             # повтор: раніше тут була тиша, тепер відповідає AI
             print("[MATCH] same answer for a different question -> AI")
             prepared = None
+        how_to = self._how_to_plan(question, prepared)
+        definition = prepared[1] if how_to == "glue" else ""
+        if how_to:
+            prepared = None
         if prepared is not None:
             print(f"[MATCH] fired prepared answer: {prepared[1]}")
             # тема для наступних уточнень = тема ЦЬОГО питання (або жодної):
@@ -626,7 +669,10 @@ class SuggestionProvider:
 
         # питання з кількох частин: готові відповіді на частини показуємо
         # одразу підряд, у AI йде лише те, на що готової немає
-        glued, rest = ("", []) if kind == "more" else self._glue_prepared(question)
+        if definition:
+            glued, rest = definition, [question]
+        else:
+            glued, rest = ("", []) if kind == "more" else self._glue_prepared(question)
         if glued:
             print(f"[MATCH] glued prepared answers; parts left for AI: {len(rest)}")
             print(f"[MATCH] fired prepared answer: {glued}")
