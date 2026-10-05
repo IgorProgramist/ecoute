@@ -177,6 +177,23 @@ NO = "No, I have not worked with it, but I know how it works."
     ("Have you used the Frame Debugger at work?", YES),
     ("Have you baked lighting in a real project?", YES),
     ("What is your experience with the Profiler?", YES),
+    # Igor 2026-10-05 named the UI and 2D tools he used at work; singular or plural is the same
+    ("Have you worked with Sprite Atlases?", YES),
+    ("Have you worked with a Sprite Atlas?", YES),
+    ("Have you worked with the Canvas Scaler?", YES),
+    ("Have you worked with anchors?", YES),
+    ("Have you worked with Layout Groups?", YES),
+    ("Have you used a Scroll Rect?", YES),
+    ("Have you worked with Prefab Variants?", YES),
+    ("Have you worked with a Prefab Variant?", YES),
+    ("Have you used 9-slicing?", YES),
+    # Igor 2026-10-05: "not in real projects, only in demos or my own projects"
+    ("Have you worked with the Particle System?", SP.EXPERIENCE_DEMO),
+    ("Have you used Particle Systems at work?", SP.EXPERIENCE_DEMO),
+    # he did not tick these: no claim either way
+    ("Have you worked with the Safe Area?", ""),
+    ("Have you worked with Timeline?", ""),
+    ("Have you worked with VFX Graph?", ""),
     # his own "Not used at work" line in ABOUT ME
     ("Have you used the Memory Profiler at work?", NO),
     ("Did you use the Profile Analyzer in your projects?", NO),
@@ -276,6 +293,19 @@ def test_how_would_you_describe_is_not_a_how_to(heard, steps):
     ("How do you understand what a Shader is?", "What is a Shader?"),
     ("What is 9-slicing, in simple words?", "What is 9-slicing?"),
     ("How do you understand what a ScriptableObject is?", "What is a ScriptableObject?"),
+    # the word "Unity" in a prepared question is not part of the name: nobody says it aloud
+    ("What is the Profiler?", "What is the Unity Profiler?"),
+    # definitions added 2026-10-05: "What is the Memory Profiler?" used to show the how-to answer
+    ("What is the Memory Profiler?", "What is the Memory Profiler?"),
+    ("Can you explain what the Memory Profiler is?", "What is the Memory Profiler?"),
+    ("How do you use the Memory Profiler?", "How do you use the Memory Profiler?"),
+    ("What is the Profile Analyzer?", "What is the Profile Analyzer?"),
+    ("Tell me what the Profile Analyzer is.", "What is the Profile Analyzer?"),
+    ("What is the Frame Debugger?", "What is the Frame Debugger?"),
+    ("Can you explain what the Profiler is?", "What is the Unity Profiler?"),
+    ("What is the Unity Profiler?", "What is the Unity Profiler?"),
+    ("What is Unity?", "What is Unity?"),
+    ("What is a build?", "What is a Unity Build?"),
     # "Batching" and "Batches" share one root: the word said letter for letter wins the tie
     ("What is Batches?", "What are Batches?"),
     ("What is the Batches counter?", "What are Batches?"),

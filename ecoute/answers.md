@@ -21,6 +21,8 @@ ABOUT ME (facts about me, use them in answers):
 - I profiled games on a real Android phone connected by USB: a Development Build with Autoconnect Profiler, and the Profiler window in the Editor attached to the phone. I also used the Frame Debugger.
 - Addressables: I used Addressables at work in a production project.
 - Baked lighting: I baked lightmaps and used Light Probes at work, in the BotBusters project.
+- UI and 2D tools I used at work: Canvas, Canvas Scaler, render modes, RectTransform, anchors, pivot, Layout Groups, Content Size Fitter, Scroll Rect, Mask, RectMask2D, Button, Image, Raw Image, 9-slicing, CanvasGroup, Sprite Atlas, Sprite Renderer, Sprite Editor, sorting layers, Prefabs, Prefab Variants, nested prefabs and overrides.
+- Only in demos and my own projects, not in real work projects: Particle System.
 - Not used at work: Memory Profiler, Profile Analyzer, Blend Trees, Animator layers. I roughly know how they work, the general things. If asked whether I used them, say that it did not come up at work.
 - Shaders: I have not written shader code by hand at work. I made shaders with the help of AI. I know how shaders work. Never say that I write HLSL or shader code by hand.
 
@@ -953,6 +955,12 @@ A: Unity Profiler shows real-time performance data for CPU, GPU, memory, fps, me
 Q: What is the Frame Debugger?
 A: Frame Debugger shows every draw call and render step for one frame in order. It helps understand what Unity renders and why objects appear in certain order. The Frame Debugger works with paused game.
 
+Q: What is the Profile Analyzer?
+A: The Profile Analyzer is a Unity tool that works together with the Profiler and analyzes the data captured from Profiler sessions. The Profiler looks at one frame, and the Profile Analyzer looks at a range of frames. It shows the minimum, maximum, median and mean time of each marker, and it can compare two captures to find performance spikes or patterns, for example before and after an optimization or across builds and devices. It is installed via Package Manager and opened from Window, Analysis, Profile Analyzer.
+
+Q: What is the Memory Profiler?
+A: The Memory Profiler is a Unity tool that takes a snapshot of the memory at one moment of the game and shows which objects, textures, and assets use the RAM. It displays managed heap, native memory, and graphics memory with detailed breakdowns by type and object. Two snapshots can be compared to see what changed and to find leaks or high usage. It is installed via Package Manager and opened from Window, Analysis, Memory Profiler.
+
 Q: What is Texture Compression?
 A: Texture compression reduces texture file size and memory usage by encoding image data in a smaller format. Compressed textures load faster and use less GPU memory but may lose some quality.
 
@@ -1675,7 +1683,7 @@ Q: Memory grows every time a player opens a screen. What is it?
 A: It can be a leak, but not always - it can also be a cache or lazy loading. Common leaks are Addressables without Release, GameObjects not destroyed, or event listeners not removed. I take a Memory Profiler snapshot before opening the screen and one after, and compare them to find memory that should be gone - then I follow the references to see why it stays.
 
 Q: How do you use the Memory Profiler?
-A: I take a snapshot, do the action, like opening a screen, take another one and compare. I look for objects or assets that should have disappeared and inspect what still references them. I also separate real leaks from expected caches or assets that are intentionally kept loaded. The Profiler also shows if the growth is textures or script memory.
+A: A snapshot is taken, then the action is done, like opening a screen, then another snapshot is taken and the two are compared. The objects or assets that should have disappeared are found, and what still references them is inspected. Real leaks are separated from expected caches or assets that are intentionally kept loaded. The Profiler also shows if the growth is textures or script memory.
 
 Q: How do you find what is holding a reference?
 A: In the Memory Profiler I select the object and look at what still references it in the snapshot, to see what keeps it alive. Then I check that owner in the code.

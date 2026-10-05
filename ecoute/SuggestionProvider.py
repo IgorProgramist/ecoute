@@ -84,6 +84,8 @@ EXPERIENCE_WORDS = 120
 # all my jobs, mainly for UI, popups and character animations"
 EXPERIENCE_YES = "Yes, I worked with it."
 EXPERIENCE_NO = "No, I have not worked with it, but I know how it works."
+# рядок "Only in demos and my own projects: ..." з ABOUT ME (Ігор 2026-10-05)
+EXPERIENCE_DEMO = "I have not used it in real projects, only in demos and my own projects."
 ACTION_NOTE = (
     "Reference notes about this Unity topic. They describe how Unity works, NOT what the candidate "
     "did — never turn them into a personal story. Take only the facts the question needs and say "
@@ -504,6 +506,13 @@ def _merge_pairs(words, vocab):
     return out
 
 
+def _no_unity(words):
+    """"What is the Unity Profiler?" і "What is the Profiler?" - одне питання: слово
+    "Unity" вголос не кажуть. Лишається, лише коли питання саме про Unity."""
+    rest = [w for w in words if w != "unity"]
+    return rest or words
+
+
 # готові питання з розділу про тестове завдання (заповнює load_prepared_answers)
 HOME_QUESTIONS = set()
 
@@ -564,7 +573,7 @@ class SuggestionProvider:
         self.prepared, self.info_text = load_prepared_answers()
         self._vocab = set(w for q, _ in self.prepared for w in _match_words(q))
         self.prepared_norm = [
-            (q, a, _normalize(q), set(_merge_pairs(_match_words(q), self._vocab)),
+            (q, a, _normalize(q), set(_no_unity(_merge_pairs(_match_words(q), self._vocab))),
              _normalize(q).replace(" ", ""))
             for q, a in self.prepared
         ]
@@ -674,18 +683,23 @@ class SuggestionProvider:
         """"Have you worked with X?" -> EXPERIENCE_NO, якщо X є в рядку "Not used at
         work" з ABOUT ME; EXPERIENCE_YES, якщо всі слова X є в решті ABOUT ME;
         "" якщо ABOUT ME про X мовчить (тоді відповідь одразу про Unity)."""
-        subject = set(_match_words(question)) - _EXPERIENCE_WORDS
+        # однина і множина - одне слово: "Sprite Atlases" є в ABOUT ME як "Sprite Atlas"
+        def words(text):
+            return set(_singular(w) for w in _match_words(text))
+        subject = words(question) - set(_singular(w) for w in _EXPERIENCE_WORDS)
         if not subject or not self.info_about:
             return ""
         used = []
         for line in self.info_about.splitlines():
-            if "not used at work" in line.lower():
+            low = line.lower()
+            listed = "not used at work" in low or "only in demos" in low
+            if listed and ":" in line:
                 items = line.split(":", 1)[1].split(".", 1)[0].split(",")
-                if any(set(_match_words(item)) <= subject for item in items if item.strip()):
-                    return EXPERIENCE_NO
+                if any(words(item) <= subject for item in items if item.strip()):
+                    return EXPERIENCE_NO if "not used at work" in low else EXPERIENCE_DEMO
             else:
                 used.append(line)
-        return EXPERIENCE_YES if subject <= set(_match_words(" ".join(used))) else ""
+        return EXPERIENCE_YES if subject <= words(" ".join(used)) else ""
 
     def _raw_words(self, prepared_question):
         """Слова готового питання без зведення до кореня (рахуються один раз)."""
@@ -852,7 +866,7 @@ class SuggestionProvider:
         Сам recall стріляв хибно: 3 спільні слова з 6 давали 0.5 навіть коли
         почуте питання було про інше (Q095 lags -> blurry, Q109 mesh)."""
         qn = _normalize(question)
-        heard = _merge_pairs(_match_words(question), self._vocab)
+        heard = _no_unity(_merge_pairs(_match_words(question), self._vocab))
         qt = set(heard)
         qsq = qn.replace(" ", "")
         # позиція слова в почутому: при рівному рахунку виграє prepared про те,
