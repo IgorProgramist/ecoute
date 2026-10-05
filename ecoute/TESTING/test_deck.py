@@ -168,12 +168,27 @@ def test_queue_waits_while_an_old_answer_is_on_the_ribbon(deck):
     deck.reserve(3)
     deck.write(3, "Answer C", restart=True, queued=True)
     deck.left()                                   # reading A again
-    deck.test_ribbon.finish()
     deck.test_silence.seconds = 9.0
-    deck.tick()
+    deck.tick()                                   # A is still on the ribbon
     assert deck.test_ribbon.shown()[-1] == "Answer A"      # C did not push in
     deck.right()                                  # back to B
     deck.right()                                  # nothing newer in history: the queue
+    assert deck.test_ribbon.shown()[-1] == "Answer C" and not deck.has_pending()
+
+
+def test_queue_goes_on_by_itself_when_the_old_answer_has_finished(deck):
+    # voice run 2026-10-05: "left" was pressed, nobody pressed "right", and the queue waited
+    # for ever - eighteen questions in a row were glued into one and never shown.
+    # Igor: when the old answer has finished, the queue goes on
+    deck.write(1, "Answer A", restart=True, queued=False)
+    deck.test_ribbon.finish()
+    deck.write(2, "Answer B", restart=True, queued=False)
+    deck.reserve(3)
+    deck.write(3, "Answer C", restart=True, queued=True)
+    deck.left()                                   # reading A again
+    deck.test_silence.seconds = 9.0
+    deck.test_ribbon.finish()                     # A has finished, no key pressed
+    deck.tick()
     assert deck.test_ribbon.shown()[-1] == "Answer C" and not deck.has_pending()
 
 
@@ -238,6 +253,17 @@ def test_everything_said_during_the_ribbon_becomes_one_question(talk):
     text = deck.pending_text()
     assert "A Prefab is" in text and "Overdraw happens" in text
     assert len(ribbon.shown()) == 1 and ribbon.badge == "+2"
+
+
+def test_no_more_than_three_remarks_are_glued_into_one_question(talk):
+    # Igor 2026-10-05: at most the three latest remarks; older ones are dropped, so one
+    # stuck queue can never grow into a question of eighteen parts again
+    provider, deck, ribbon = talk
+    merged = ""
+    for epoch, q in enumerate(["What is a Canvas?", "What is a Prefab?", "What is overdraw?",
+                               "What is batching?", "What is a draw call?"], start=1):
+        merged = provider._merge_queued(q, epoch)
+    assert merged == "What is overdraw? What is batching? What is a draw call?"
 
 
 def test_after_the_queue_is_shown_the_next_question_starts_clean(talk):

@@ -1,4 +1,5 @@
 import os
+import sys
 import time
 import tkinter as tk
 from tkinter import font as tkfont
@@ -71,7 +72,7 @@ class Teleprompter(tk.Canvas):
         """Глобальна кнопка '1' — показати CoverLetter (працює з будь-якого вікна)."""
         def _cb(event):
             name = (event.name or "").lower()
-            if name == "1":
+            if name == "1" and "--no-keys" not in sys.argv:
                 try:
                     self.after(0, self.show_cover_letter)
                 except Exception:

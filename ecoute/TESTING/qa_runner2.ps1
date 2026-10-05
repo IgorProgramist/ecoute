@@ -79,7 +79,7 @@ function Read-NewLog {
 }
 
 # ---------- launch ecoute fresh ----------
-$ecouteArgs = @("-3.14","-u","main.py","--active")
+$ecouteArgs = @("-3.14","-u","main.py","--active","--no-keys")
 if (-not $Queue) { $ecouteArgs += "--no-queue" }
 $proc = Start-Process -FilePath "py" -ArgumentList $ecouteArgs `
         -WorkingDirectory $ecouteDir -WindowStyle Hidden -PassThru

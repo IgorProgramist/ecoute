@@ -177,7 +177,8 @@ def main():
             return 999.0 if last is None else (datetime.utcnow() - last).total_seconds()
         display = AnswerDeck(display, silence_fn=speaker_silence_s, wait_s=config.QUEUE_SILENCE_S)
         display.on_promote = suggestion_provider.promoted
-        display.arm_hotkeys()
+        if '--no-keys' not in sys.argv:      # тест-ранер: друк на клавіатурі не має гортати стрічку
+            display.arm_hotkeys()
         display.run()
         print("[INFO] answer queue ON: a new question does not interrupt the ribbon")
 

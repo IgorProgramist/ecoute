@@ -97,6 +97,7 @@ DRAW CALLS AND BATCHING:
 - SetPass call - a switch to the shader pass used for drawing. Many SetPass calls can add CPU cost, so I watch them together with draw calls.
 - Batching - Unity groups objects that fit together, so it needs fewer draw calls or cheaper ones. It works only when they are drawn the same way: material, texture, shader pass and keywords, sorting and masks all matter.
 - Atlas (Sprite Atlas) - one big texture with many sprites, so they CAN share one texture and batch. It does not cut draw calls by itself: draw order, materials, shaders and masks can still split the batches.
+- Sprites are packed with a Sprite Atlas asset. The old Packing Tag and the old Sprite Packer are legacy and are not used now.
 - Why: A phone processor is weak.
 - I set a draw-call budget for each project from typical weak phones, and check it with the Profiler and Frame Debugger - there is no one number for everyone.
 - When to use what (4 kinds of batching): SRP Batcher - does NOT cut the number of draw calls, but makes each one cheaper to set up. Works for objects with the same shader variant, even with different materials. For 2D sprites I mainly think about Sprite Atlases, shared materials and draw order; for uGUI I think about Canvas batching and rebuilds instead.
@@ -107,6 +108,7 @@ DRAW CALLS AND BATCHING:
 - What breaks a batch: a sprite from another atlas between two sprites from the same atlas; different materials; masks; per-object property overrides in URP; different shader keywords.
 - SRP Batcher and dynamic batching: in URP the SRP Batcher and GPU Instancing usually come before Dynamic Batching. I don't count on Dynamic Batching and I measure the real scene.
 - Many copies of the same mesh can use GPU Instancing. For other compatible objects, the SRP Batcher can make draw calls cheaper for the CPU.
+- SRP Batcher and GPU Instancing do not work on the same object. If an object is compatible with the SRP Batcher, Unity uses the SRP Batcher and ignores GPU Instancing, even when Enable GPU Instancing is on. To use instancing, the object must not be SRP Batcher compatible.
 - If fewer batches don't make the frame faster, batching probably wasn't the main problem - I profile CPU and GPU time to find what really slows the frame.
 
 TEXTURES AND COMPRESSION:
@@ -146,6 +148,7 @@ UI (Canvas, uGUI, TextMeshPro):
 - A common fix: static UI and often-changing UI on separate Canvases, so one change doesn't rebuild a large unrelated Canvas.
 - What can split UI batches: different materials or textures, draw order, and Masks that use the stencil (Mask adds extra drawing work; RectMask2D is usually cheaper for a simple rectangle clip).
 - When a layout changes (children added, removed or resized), Layout Group and Content Size Fitter calculate again; layouts inside layouts multiply the cost. For static layouts - anchors. For long lists - reuse the item views.
+- Content Size Fitter on a child of a Layout Group: both try to set the same size. Unity shows a warning in the Inspector of the Content Size Fitter, not in the Console. The fix is to let the Layout Group control the child size and put the Content Size Fitter on the object with the Layout Group.
 - The Graphic Raycaster checks every Graphic that has Raycast Target on, so I turn it off on decoration to cut extra raycast work.
 - Safe Area: buttons inside, backgrounds full screen.
 - TMP: Static font asset = a fixed set of letters baked in advance; Dynamic = letters are added when needed (useful when the text can have letters you did not plan for). Every Material Preset = a new material. No Auto Size on counters. Leave room for longer translated text.
@@ -192,9 +195,11 @@ ADDRESSABLES AND REMOTE CONTENT:
 - For shared assets like atlases or materials, I run Analyze to find duplicates between bundles. If something is duplicated, I fix the grouping or give it its own group.
 - For content updates: I keep the content state file from the release. "Update a Previous Build" creates an update that minimizes what players download. With the right restrictions and packing, unchanged bundles stay the same, and only changed content gets new bundles. "Check for Content Update Restrictions" moves changes out of static groups.
 - Mark groups "Cannot Change Post Release" to move changed assets into a new update group. Or "Can Change Post Release" so a changed asset rebuilds its bundle - the download cost depends on packing.
+- In newer Addressables the group setting is one checkbox called Prevent Updates. Prevent Updates on is the old Cannot Change Post Release, Prevent Updates off is the old Can Change Post Release.
 - I keep the handle of each load and release it when I don't need the content anymore. I unload event content when the event ends.
 - Analyze - finds duplicates between groups.
 - Watch out for: everything in Default Local Group, anything in Resources folder, remote groups with no remote paths, blocking loads, and forgetting to Release.
+- Resources folder: everything in it always ships in the build, so the app gets bigger. At startup Unity builds a lookup of all Resources assets, so a big Resources folder makes the start slower. The assets themselves load only when they are requested, not all at launch.
 - My groups in the test: Local_Core, Shared_FX, Remote_Island_TeaHouse.
 
 PROFILER AND FRAME DEBUGGER (often a live test):
@@ -851,8 +856,6 @@ Q: What is a Material?
 A: A Material is an asset that defines how an object looks when rendered, containing a Shader and values like color and textures.
 
 
-Q: What is a Shader?
-A: Shaders are scripts that contain the mathematical calculations and algorithms for calculating the color of each pixel rendered, based on the lighting input and the material configuration. A Shader is a program that runs on the GPU.
 
 Q: What is Shader Graph?
 A: Shader Graph is a visual node-based editor for creating Shaders without writing code. It allows artists to build complex materials through node connections with real-time preview.
@@ -897,7 +900,7 @@ Q: What is Overdraw?
 A: Overdraw happens when the same pixel is drawn multiple times in one frame, wasting GPU performance. It occurs with overlapping transparent objects like particles, UI panels, or sprites. Red areas in Overdraw mode indicate problem zones where performance is lost.
 
 Q: What is Fixing Overdraw?
-A: Fixing overdraw means reducing how many times pixels are drawn multiple times to improve performance. This is done by using fewer transparent particles or replacing transparency with Alpha Clipping for hard edges. Additive blend does not reduce overdraw - pixels are still drawn many times when transparent objects overlap. Overdraw is visible in Scene view Overdraw mode where red zones show problem areas that need optimization.
+A: Fixing overdraw means reducing how many times pixels are drawn multiple times to improve performance. This is done by using fewer transparent particles. For hard edges Alpha Clipping can be tried instead of blending, and the result is measured on the phone. Additive blend does not reduce overdraw - pixels are still drawn many times when transparent objects overlap. Overdraw is visible in Scene view Overdraw mode where red zones show problem areas that need optimization.
 
 Q: What is Fill Rate?
 A: Fill Rate is the number of pixels the GPU can render per second. It is a limiting factor for mobile performance, especially with large transparent effects or high-resolution UI. Fill Rate limitations cause frame drops when too many pixels need processing.
@@ -906,19 +909,22 @@ Q: What is Transparency?
 A: This is one of the rendering modes in a material where we can choose the alpha parameter. It makes objects see-through with soft edges, like smoke or glass, but many transparent layers cause overdraw.
 
 Q: What is Alpha Clipping?
-A: Alpha clipping discards pixels with an alpha channel value below a certain threshold, creating sharp edges instead of a smooth transparency transition. Alpha clipping improves performance because the discarded pixels are not rendered.
+A: Alpha clipping discards pixels with an alpha channel value below a certain threshold, creating sharp edges instead of a smooth transparency transition. It avoids blending, but on phones discarding pixels can cost more, so it is measured on the device.
 
 Q: What is a Draw Call?
-A: A draw call is a command from CPU to GPU telling it to draw objects. Too many draw calls slow down the game because CPU spends time sending commands instead of doing other work. Reducing draw calls by batching or instancing improves performance. Batching is used for optimization.
+A: A draw call is a command from the CPU that tells the GPU to render a mesh. Too many draw calls slow down the game because CPU spends time sending commands instead of doing other work. Reducing draw calls by batching or instancing improves performance. Batching is used for optimization.
 
 Q: What is Batching?
 A: Batching combines multiple objects into one draw call so GPU draws them together instead of separately. This reduces CPU work and speeds up rendering. Unity has static batching, dynamic batching, and SRP Batcher as different batching methods.
+
+Q: What are Batches?
+A: Batches are groups of objects that Unity combines into single draw calls to reduce CPU overhead and improve rendering performance. The Batches counter in Profiler or Frame Stats shows how many separate draw calls are sent to GPU each frame. Lower batch count means better performance, achieved through static batching, dynamic batching, or GPU instancing.
 
 Q: What is Static Batching?
 A: Static batching combines objects that never move into one big mesh at build time or startup. This creates one draw call for many static objects like buildings or trees. Objects must be marked as Static in Inspector to use this feature.
 
 Q: What is Dynamic Batching?
-A: Dynamic batching combines small moving objects into one draw call each frame if they share the same material. Unity does this automatically for small meshes.
+A: Dynamic batching combines small moving objects into one draw call each frame if they share the same material. In URP it must be turned on, and Unity does not recommend counting on it.
 
 Q: What is the SRP Batcher?
 A: SRP Batcher is a faster batching system for Universal Render Pipeline and High Definition Render Pipeline. It reduces CPU overhead by keeping render data in GPU memory instead of uploading it each frame. This works with both static and dynamic objects using compatible shaders.
@@ -942,16 +948,16 @@ Q: What is Garbage Collector?
 A: Garbage collector is a system that cleans up memory that code no longer uses. When it runs, it can cause a short freeze. To avoid this, objects are reused instead of created every frame.
 
 Q: What is the Unity Profiler?
-A: Unity Profiler shows real-time performance data for CPU, GPU, memory, fps, meshes and other systems. It helps find what is slowing down the game by showing time spent in each function. The Profiler is opened from Window → Analysis → Profiler and used during play mode.
+A: Unity Profiler shows real-time performance data for CPU, GPU, memory, fps, meshes and other systems. It helps find what is slowing down the game by showing time spent in each function. The Profiler is used during play mode.
 
 Q: What is the Frame Debugger?
-A: Frame Debugger shows every draw call and render step for one frame in order. It helps understand what Unity renders and why objects appear in certain order. The Frame Debugger is opened from Window → Analysis → Frame Debugger and works with paused game.
+A: Frame Debugger shows every draw call and render step for one frame in order. It helps understand what Unity renders and why objects appear in certain order. The Frame Debugger works with paused game.
 
 Q: What is Texture Compression?
 A: Texture compression reduces texture file size and memory usage by encoding image data in a smaller format. Compressed textures load faster and use less GPU memory but may lose some quality.
 
 Q: What is a Mipmap?
-A: Mipmaps are smaller versions of a texture used when objects are far from camera to save memory and improve quality. Unity generates mipmaps automatically and selects the right size based on distance. Enabling mipmaps uses more memory but prevents flickering and improves performance for 3D objects.
+A: Mipmaps are smaller versions of a texture used when objects are far from camera to improve quality and speed. Unity generates mipmaps automatically and selects the right size based on distance. Enabling mipmaps uses more memory but prevents flickering and improves performance for 3D objects.
 
 Q: What is Max Texture Size?
 A: Max Texture Size limits the largest dimension of a texture to reduce memory usage.
@@ -1008,13 +1014,16 @@ Q: What does "Deliver within release timelines and coordinate your work with the
 A: This means completing tasks on schedule so the game can be released on time and working with other team members like artists and designers. Coordination includes using version control, following naming conventions, and communicating when assets are ready. Meeting deadlines requires planning work and prioritizing critical performance fixes.
 
 Q: What is core tools in Unity?
-A: Core tools in Unity include Profiler for performance, Frame Debugger for rendering, Memory Profiler for allocations, and Addressables for asset management. These tools are accessed through Window → Analysis menu and used for optimization work.
+A: Core tools in Unity include Profiler for performance, Frame Debugger for rendering, Memory Profiler for allocations, and Addressables for asset management. The profiling tools are in the Window, Analysis menu and are used for optimization work.
 
 Q: What is addressables remote content delivery?
 A: Addressables remote content delivery means hosting asset bundles on a server and downloading them to players devices when needed. This allows updating game content like new levels or events without releasing a new app version. Remote content requires a catalog URL and is loaded using Addressables with remote group settings.
 
 Q: What is RawImage?
 A: RawImage is a UI component that displays textures or render textures directly without using sprites or atlases. This is useful for dynamic content like downloaded images, video playback, or runtime-generated textures. RawImage is found under UI menu and accepts Texture or RenderTexture as source.
+
+Q: What is a Shader?
+A: A Shader is a program that runs on the GPU and determines how pixels are calculated and displayed during rendering. It defines lighting, textures, transparency, and visual effects that create the final appearance. Shaders are scripts that contain the mathematical calculations and algorithms for calculating the color of each pixel rendered
 
 Q: What is stencil buffer?
 A: Stencil buffer is a GPU feature that masks rendering to specific screen areas using values instead of alpha blending.
@@ -1023,7 +1032,7 @@ Q: How to optimize shaders?
 A: Optimizing shaders means simplifying shader code to use fewer GPU instructions and texture samples for faster rendering. This is done by removing unnecessary calculations, using simpler math functions, and reducing texture fetches in fragment shaders. Shaders are optimized in Shader Graph by using fewer nodes or in hand-written shaders by simplifying HLSL code.
 
 Q: What exactly needs to be done to reduce overdraw?
-A: Reducing overdraw requires decreasing overlapping transparent objects by using fewer particles or making them smaller. Additive blend does not reduce overdraw - pixels are still drawn many times when transparent objects overlap. Another method is replacing Alpha Blend transparency with Alpha Clipping for hard-edge objects like foliage or grates to avoid blending calculations. Overdraw is identified in Scene view Overdraw mode and fixed by adjusting particle systems, UI panels, or transparent materials.
+A: Reducing overdraw requires decreasing overlapping transparent objects by using fewer particles or making them smaller. Additive blend does not reduce overdraw - pixels are still drawn many times when transparent objects overlap. For hard-edge objects like foliage or grates Alpha Clipping can be tried instead of blending, and the result is measured on the phone. Overdraw is identified in Scene view Overdraw mode and fixed by adjusting particle systems, UI panels, or transparent materials.
 
 Q: How exactly to fix memory leaks?
 A: Fixing memory leaks means finding code that keeps references to objects preventing garbage collector from freeing memory and removing those references.
@@ -1059,7 +1068,7 @@ Q: What is the difference between Animator and Tweening?
 A: Animator uses Animation Clips and state machines for complex character animation with blending and transitions. Tweening libraries like DOTween animate properties directly through code for simple UI or object animations without clips. Animator is for character animation and Tweening is for programmatic simple animations.
 
 Q: What is the difference between Mask and RectMask2D?
-A: Mask uses stencil buffer to cut content into any shape but adds extra draw calls and is slower on mobile. RectMask2D uses simple rectangle Mesh clipping without stencil buffer making it faster and better for UI and Canvases. RectMask2D is preferred for rectangular UI areas and for 9-slice while Mask is only for irregular shapes.
+A: Mask uses stencil buffer to cut content into any shape but adds extra draw calls and is slower on mobile. RectMask2D clips to a simple rectangle without stencil buffer making it faster and better for UI and Canvases. RectMask2D is preferred for rectangular UI areas while Mask is only for irregular shapes.
 
 Q: What is the difference between Full Rect and Tight Mesh?
 A: Full Rect creates a sprite mesh covering the entire rectangle while Tight Mesh creates a mesh that fits only the visible pixels reducing overdraw. Tight Mesh is better for irregular shapes like circles or characters to avoid rendering transparent areas. Full Rect is faster to generate but Tight Mesh saves GPU work.
@@ -1074,10 +1083,10 @@ Q: What is the difference between Particle System and VFX Graph?
 A: Particle System is the built-in CPU-based particle system for simple effects like fire or smoke that works on all platforms. VFX Graph is a GPU-based system for complex high-count effects like magic or explosions that requires compute shader support. Particle System is for mobile and simple effects while VFX Graph is for high-end platforms.
 
 Q: What is the difference between Transparency and Alpha Clipping?
-A: Transparency blends pixels with background using alpha values creating semi-transparent effects but causes overdraw. Alpha Clipping discards pixels below a threshold creating hard edges without blending which is faster and has no overdraw. Transparency is for glass or ghosts while Alpha Clipping is for foliage or grates.
+A: Transparency blends pixels with background using alpha values creating semi-transparent effects but causes overdraw. Alpha Clipping discards pixels below a threshold creating hard edges without blending. It is not always faster on phones. Transparency is for glass or ghosts while Alpha Clipping is for foliage or grates.
 
 Q: What is the difference between Static Batching and Dynamic Batching?
-A: Static Batching combines non-moving objects into one mesh at build time for zero runtime cost but objects cannot move. Dynamic Batching combines moving objects each frame automatically but has vertex limits and CPU overhead. Dynamic Batching objects must have the same material. Static is for buildings and terrain while Dynamic is for moving props.
+A: Static Batching combines non-moving objects into one mesh at build time, so it is cheap at runtime but uses more memory, and objects cannot move. Dynamic Batching combines moving objects each frame automatically but has vertex limits and CPU overhead. Dynamic Batching objects must have the same material. Static is for buildings and terrain while Dynamic is for moving props.
 
 Q: What is the difference between Batching and SRP Batcher?
 A: Batching combines objects to reduce draw calls through static or dynamic methods that merge geometry. SRP Batcher keeps render data in GPU memory and reduces CPU overhead without merging geometry, working with compatible shaders. Batching reduces draw call count while SRP Batcher makes each draw call faster.
@@ -1086,7 +1095,7 @@ Q: What is the difference between CPU-bound and GPU-bound?
 A: CPU-bound means processor is the bottleneck from too many draw calls, physics, or script calculations limiting performance. GPU-bound means graphics card is the bottleneck from high resolution, complex shaders, or overdraw limiting performance. CPU-bound is fixed by batching and script optimization while GPU-bound is fixed by lowering quality settings.
 
 Q: What is the difference between Addressables and Resources?
-A: Addressables loads assets by name, supporting local or remote delivery options and explicit unloading. Resources loads assets from Resources folder by path but includes all Resources assets in every build and cannot unload selectively. Addressables is the modern recommended system while Resources is legacy and discouraged.
+A: Addressables loads assets by name, supporting local or remote delivery options and explicit unloading. Resources loads assets from Resources folder by path but includes all Resources assets in every build. Addressables is the modern recommended system while Resources is legacy and discouraged.
 
 Q: What is the difference between Addressables and AssetBundles?
 A: Addressables is a high-level system that uses AssetBundles internally but adds features like labels, groups, and easy loading API. AssetBundles are the underlying bundle files that must be manually built, loaded, and managed with more complex code. Addressables wraps AssetBundles for easier use and better workflow.
@@ -1130,7 +1139,7 @@ Q: What is the difference between EditMode and PlayMode tests?
 A: EditMode tests run in the Editor without Play - fast, and good for tools and data checks. PlayMode tests run real frames with the game systems working, which is needed for gameplay and UI animation.
 
 Q: Have you written shaders by hand?
-A: Not in production. My work was mostly UI, animation and atlases, so shaders were not part of my tasks. I understand how shaders work and what makes them expensive on mobile, and I can build simple effects in Shader Graph.
+A: Not in production. My work was mostly UI, animation and atlases, so shaders were not part of my tasks. I understand how shaders work and what makes them expensive on mobile, and I made shaders with the help of AI.
 
 Q: How do you profile a game on a real phone?
 A: A Development Build with Autoconnect Profiler is made in the Build Profiles window. The phone is connected by USB with USB debugging turned on, and the game is started with Build And Run. Then the Profiler window in the Editor is switched from Editor to the phone, and it shows what takes time on the real device.
@@ -1398,6 +1407,9 @@ A: I step through the Frame Debugger and look at what changes between calls - ma
 
 Q: What is the difference between static batching, dynamic batching, GPU instancing and the SRP Batcher?
 A: Static batching joins meshes that don't move at build time. Dynamic batching can join some small meshes, but Unity today doesn't recommend counting on it. GPU Instancing draws many copies of the same mesh and material in one instanced draw call. The SRP Batcher makes each draw call cheaper for the CPU, but doesn't cut the number of calls, and it matters most for compatible mesh-based rendering. For 2D sprites the main tools are Sprite Atlases, shared materials and draw order.
+
+Q: Can GPU Instancing be used together with the SRP Batcher?
+A: Not on the same object. If an object is compatible with the SRP Batcher, Unity uses the SRP Batcher and ignores GPU Instancing, even when it is enabled on the material. SRP Batcher is good for many different objects with one shader. GPU Instancing is good for many copies of one mesh.
 
 --- TEXTURES AND COMPRESSION ---
 
@@ -1681,7 +1693,7 @@ Q: How do you release memory from Addressables?
 A: I keep the load or instance handle and release it with the matching Addressables release method when the content is not needed anymore. A bundle unloads only when nothing uses it, so I keep track of the handles.
 
 Q: What is the difference between Cannot Change Post Release and Can Change Post Release?
-A: Cannot Change for content that should stay the same - if an asset changes, it can move into a new small update group, and the old bundles stay valid. Can Change - a changed asset can make its whole bundle rebuild, and how much players download depends on how the group is packed.
+A: Cannot Change for content that should stay the same - if an asset changes, it can move into a new small update group, and the old bundles stay valid. Can Change - a changed asset can make its whole bundle rebuild, and how much players download depends on how the group is packed. In newer Addressables this is one checkbox called Prevent Updates.
 
 Q: How do you check Addressables duplicates?
 A: I run the Analyze tool and look for assets duplicated across bundles. Shared dependencies can be pulled into several bundles depending on the group structure, so I give truly shared content a clear owner group where that reduces duplication.

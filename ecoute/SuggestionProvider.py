@@ -17,6 +17,7 @@ REFIRE_MIN_NEW_WORDS = 4   # повторний показ тільки якщо
 # (17 разів за 2 прогони). Виміряно: один запит = перше слово за 1.4с,
 # п'ять одночасних = 20-39с
 STREAM_FIRST_WORD_S = 25
+QUEUE_MAX_REMARKS = 3      # скільки останніх реплік склеюється в одне питання в черзі
 
 SYSTEM_PROMPT_TEMPLATE = (
     "You are helping a candidate during a live technical job interview (Unity / Technical Artist role). "
@@ -190,10 +191,21 @@ def _singular(w):
     return w
 
 
+def _root(w):
+    """Корінь слова для назв розділів: batching, batcher, batches -> batch.
+    Питання про "SRP Batcher" не знаходило розділ "DRAW CALLS AND BATCHING",
+    і факт про GPU Instancing до AI не доходив."""
+    w = _singular(w)
+    for tail in ("ing", "er"):
+        if len(w) > len(tail) + 3 and w.endswith(tail):
+            return w[:-len(tail)]
+    return w
+
+
 def _title_words(title):
-    """Змістові слова заголовка розділу (до дужки), без множини."""
+    """Змістові слова заголовка розділу (до дужки), зведені до кореня."""
     head = _normalize(title.split("(")[0])
-    return set(_singular(w) for w in head.split() if len(w) >= 4 and w not in _TITLE_IGNORE)
+    return set(_root(w) for w in head.split() if len(w) >= 4 and w not in _TITLE_IGNORE)
 
 
 # про гроші кандидат відповідає сам: AI вигадав "senior level market rate"
@@ -589,6 +601,23 @@ class SuggestionProvider:
             else:
                 kept.append((t, x))
         self.info_sections = kept
+        # окремі рядки знань для _fact_lines: (корені слів, рядок, чи це про тестове)
+        self._fact_index = []
+        seen = {}
+        for title, text in kept:
+            for line in text.splitlines():
+                line = line.strip()
+                if not line.startswith("- "):
+                    continue
+                roots = set(_root(w) for w in _normalize(line).split() if len(w) >= 5)
+                is_home = "HOME ASSIGNMENT" in title.upper() or bool(
+                    _TEST_LINE_RE.search(line) or re.search(r"\bin my (assignment|scene)\b", line, re.I))
+                self._fact_index.append((roots, line, is_home))
+                for r in roots:
+                    seen[r] = seen.get(r, 0) + 1
+        # слова, що є в багатьох рядках ("unity", "sprite"), рядок не визначають
+        self._fact_common = set(r for r, n in seen.items() if n > 40) | {
+            "module", "system", "component", "object", "thing", "unity", "about", "which", "would"}
 
     def _load_actions(self):
         """Кукбукс: для кожної теми слова назви (вага 3), слова з дужок заголовка
@@ -657,6 +686,13 @@ class SuggestionProvider:
             else:
                 used.append(line)
         return EXPERIENCE_YES if subject <= set(_match_words(" ".join(used))) else ""
+
+    def _raw_words(self, prepared_question):
+        """Слова готового питання без зведення до кореня (рахуються один раз)."""
+        cache = self.__dict__.setdefault("_raw_cache", {})
+        if prepared_question not in cache:
+            cache[prepared_question] = set(_ordered_tokens(prepared_question))
+        return cache[prepared_question]
 
     def _tail_prepared(self, question):
         """"Let's talk about UI, what is a Canvas?" -> готова відповідь на саме питання
@@ -759,7 +795,7 @@ class SuggestionProvider:
             return ""
         qn = _normalize(question)
         qwords = set(w for w in qn.split() if len(w) >= 4)
-        qnames = set(_singular(w) for w in qwords)
+        qnames = set(_root(w) for w in qwords)
         home = bool(_HOME_RE.search(question.lower()))
         scored = []
         for title, text in self.info_sections:
@@ -788,7 +824,27 @@ class SuggestionProvider:
                 text = "\n".join(l for l in text.splitlines() if not _TEST_LINE_RE.search(l))
             if text:
                 out += text.strip() + "\n\n"
+        facts = [l for l in self._fact_lines(question) if l not in out]
+        if facts:
+            out += "Facts that match the question:\n" + "\n".join(facts) + "\n\n"
         return out
+
+    def _fact_lines(self, question, limit=4):
+        """Окремі рядки знань, що збігаються з питанням двома і більше змістовими
+        словами. Розділ вибирається за першими 800 символами, тож факт у глибині
+        довгого розділу до AI не доходив: про Resources він домислив "loads into
+        memory at launch", хоча правильний рядок у файлі був."""
+        home = bool(_HOME_RE.search(question.lower()))
+        words = set(_root(w) for w in _normalize(question).split() if len(w) >= 5) - self._fact_common
+        if len(words) < 2:
+            return []
+        scored = []
+        for i, (roots, line, is_home) in enumerate(self._fact_index):
+            hits = len(words & roots)
+            if hits >= 2 and (home or not is_home):
+                scored.append((-hits, i, line))
+        scored.sort()
+        return [line for _, _, line in scored[:limit]]
 
     def _best_prepared(self, question, part=False):
         """Рахунок = F1 по змістових словах: скільки слів prepared-питання
@@ -806,7 +862,8 @@ class SuggestionProvider:
             order.setdefault(w, i)
         # "how would you describe X" - теж прохання про визначення, хоч "what" і немає
         what_asked = "what" in qn.split() or bool(_DESCRIBE_RE.search(question.lower()))
-        best_key, best, best_ov, best_ptok = (0.0, 0.0, False, 0.0), None, 0, set()
+        raw = set(_ordered_tokens(question))
+        best_key, best, best_ov, best_ptok = (0.0, 0.0, False, 0, 0.0), None, 0, set()
         for qorig, aorig, qnorm, ptok, psq in self.prepared_norm:
             ov = len(qt & ptok)
             f1 = 0.0
@@ -831,7 +888,10 @@ class SuggestionProvider:
             # рівний рахунок: питали "what ... is" - виграє визначення ("What is a
             # ScriptableObject?"), а не "When do you use ScriptableObjects?"
             same_kind = what_asked and qnorm.startswith("what")
-            key = (round(score, 3), -first, same_kind, ratio)
+            # "Batching" і "Batches" мають один корінь: виграє питання, де слово
+            # сказано буква в букву
+            exact = len(raw & self._raw_words(qorig)) if score else 0
+            key = (round(score, 3), -first, same_kind, exact, ratio)
             if key > best_key:
                 best_key, best, best_ov, best_ptok = key, (qorig, aorig), ov, ptok
         if best_key[0] < config.MATCH_THRESHOLD:
@@ -855,7 +915,7 @@ class SuggestionProvider:
         # частина складного питання: одного спільного слова мало, якщо частина
         # не складається лише з нього ("what do you check first" -> "How did
         # you check it?" - хибно; "what is overdraw" -> Overdraw - вірно)
-        if part and best_ov < 2 and len(qt) != 1 and best_key[3] < 0.9:
+        if part and best_ov < 2 and len(qt) != 1 and best_key[4] < 0.9:
             return None
         # питання з 2-3 частин: одна prepared-відповідь закриває лише одну з них
         # (Prefab + Variant + "коли" -> показано тільки Variant). Таке йде в AI,
@@ -1042,6 +1102,8 @@ class SuggestionProvider:
             self._queued_parts[-1] = (epoch, question)
         else:
             self._queued_parts.append((epoch, question))
+        # не більше трьох останніх реплік: черга, що застрягла, не роздує питання
+        self._queued_parts = self._queued_parts[-QUEUE_MAX_REMARKS:]
         return " ".join(q for _, q in self._queued_parts)
 
     def _glue_prepared(self, question):

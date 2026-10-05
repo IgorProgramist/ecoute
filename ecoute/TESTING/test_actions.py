@@ -276,6 +276,10 @@ def test_how_would_you_describe_is_not_a_how_to(heard, steps):
     ("How do you understand what a Shader is?", "What is a Shader?"),
     ("What is 9-slicing, in simple words?", "What is 9-slicing?"),
     ("How do you understand what a ScriptableObject is?", "What is a ScriptableObject?"),
+    # "Batching" and "Batches" share one root: the word said letter for letter wins the tie
+    ("What is Batches?", "What are Batches?"),
+    ("What is the Batches counter?", "What are Batches?"),
+    ("Can you explain what batching is?", "What is Batching?"),
     # found by dry_wordings.py: no "what" in the question, "When do you use ..." won the tie
     ("How would you describe a ScriptableObject?", "What is a ScriptableObject?"),
     ("How would you describe Object Pooling?", "What is Object Pooling?"),
@@ -426,6 +430,46 @@ def test_have_you_worked_with_it_needs_no_cookbook(heard, style):
     want = SP.STYLE_EXPERIENCE if style == "experience" else SP.STYLE_PLAIN
     assert SP._style_for(heard, False) == want
     assert (SP._answer_words(heard, False) == SP.EXPERIENCE_WORDS) == (style == "experience")
+
+
+@pytest.mark.parametrize("heard", [
+    # voice run 2026-10-05: the AI said "Yes, they work well together... turning both on is the
+    # normal setup". Unity Manual: an SRP Batcher compatible object is drawn by the SRP Batcher
+    # and GPU Instancing is ignored. Igor caught it; the fact and a prepared answer were added
+    "Can GPU Instancing be used together with the SRP Batcher?",
+    "Does GPU Instancing work together with the SRP Batcher?",
+    "What is GPU Instancing, and can it be used together with the SRP Batcher?",
+])
+def test_instancing_with_srp_batcher_is_answered_from_the_prepared_fact(sp, heard):
+    hit = sp._best_prepared(heard)
+    shown = hit[1] if hit else sp._glue_prepared(heard)[0]
+    assert "Not on the same object" in shown
+
+
+def test_the_ai_is_told_that_instancing_and_srp_batcher_exclude_each_other(sp):
+    sent = sp._relevant_info("Should I enable GPU Instancing when the SRP Batcher is on?")
+    assert "do not work on the same object" in sent
+
+
+@pytest.mark.parametrize("heard, fact", [
+    # fact check of the voice run 2026-10-05. The AI said that everything in Resources
+    # "loads into memory at launch"; only the lookup is built at startup
+    ("Why is the Resources folder discouraged?", "load only when they are requested"),
+    # Addressables 2.9.0 in Igor's project: the checkbox is called Prevent Updates
+    ("How do you set the content update restriction of an Addressables group?", "Prevent Updates"),
+])
+def test_fact_checked_knowledge_reaches_the_ai(sp, heard, fact):
+    assert fact in sp._relevant_info(heard)
+
+
+def test_single_fact_lines_are_few_and_on_topic(sp):
+    # a fact deep inside a long section was invisible: sections are chosen by their first
+    # 800 characters. Lines that share two content words with the question are sent too
+    lines = sp._fact_lines("Why is the Resources folder discouraged?")
+    assert 1 <= len(lines) <= 4 and any("lookup of all Resources" in l for l in lines)
+    assert sp._fact_lines("What is your name?") == []
+    # details of the home assignment stay out unless the question is about it
+    assert not any("In my assignment" in l for l in sp._fact_lines("How would you split Addressables groups?"))
 
 
 def test_prepared_answers_do_not_carry_the_next_section_marker(sp):
