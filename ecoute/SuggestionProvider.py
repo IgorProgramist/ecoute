@@ -544,6 +544,11 @@ class SuggestionProvider:
         self._prev_fired_q = None
         self._last_epoch = None
         self._retried = False
+        self._main_gen = None        # покоління відповіді, що на стрічці або пишеться для неї
+        self._main_inflight = False  # ця відповідь ще пишеться (стрічка може бути порожня)
+        self._queued_parts = []      # [(epoch, текст)] сказане, поки стрічка зайнята
+        self._queued_gens = set()    # покоління, чиї відповіді йдуть у чергу
+        self._queued_text = None     # текст відповіді, що чекає в черзі
         self.prepared, self.info_text = load_prepared_answers()
         self._vocab = set(w for q, _ in self.prepared for w in _match_words(q))
         self.prepared_norm = [
@@ -930,6 +935,19 @@ class SuggestionProvider:
             # початок рядка той самий, що в підтвердження: тест-ранер читає його як "ignored"
             print("[MATCH] acknowledgement ignored (money question - the candidate answers himself)")
             return
+        # черга (config.RIBBON_QUEUE): стрічка зайнята або перша відповідь ще
+        # пишеться - нове питання не перериває, а стає в чергу. Усе сказане за цей
+        # час склеюється в одне питання
+        if self._queue_on(display):
+            if display.busy() or self._main_inflight:
+                question = self._merge_queued(question, phrase_epoch)
+                kind = _utterance_kind(question)
+                self._queued_gens.add(self._gen)
+                display.reserve(self._gen)
+                print(f"[QUEUE] ribbon is busy, queued: {question[:200]}")
+            else:
+                self._queued_parts = []
+                self._main_gen = self._gen
         # що було сказано до цього: AI потрібне для "tell me more" / "why?"
         context = (self._prev_fired_q, self.last_shown_answer)
         prev_q, self._prev_fired_q = self._prev_fired_q, question
@@ -958,7 +976,7 @@ class SuggestionProvider:
             # тема для наступних уточнень = тема ЦЬОГО питання (або жодної):
             # інакше "tell me more" після overdraw тягнуло б кукбукс про Canvas
             self._last_action = self._relevant_action(question)
-            self._set_text(display, shown, restart=True)
+            self._set_text(display, shown, restart=True, gen=self._gen)
             return
 
         # питання з кількох частин: готові відповіді на частини показуємо
@@ -975,7 +993,7 @@ class SuggestionProvider:
         if glued:
             print(f"[MATCH] glued prepared answers; parts left for AI: {len(rest)}")
             print(f"[MATCH] fired prepared answer: {glued}")
-            self._set_text(display, glued, restart=True)
+            self._set_text(display, glued, restart=True, gen=self._gen)
             if not rest:
                 return
 
@@ -987,8 +1005,44 @@ class SuggestionProvider:
         self._busy_gen = self._gen
         # НЕ показуємо "generating answer..." — стрічка мовчить, поки
         # відповідь реально не готова (без миготіння)
-        threading.Thread(target=self._fetch, args=(question, display, self._gen),
+        if self._gen == self._main_gen:
+            self._main_inflight = True
+        threading.Thread(target=self._run_fetch, args=(question, display, self._gen),
                          kwargs={"prefix": glued, "only": rest, "context": context}, daemon=True).start()
+
+    def _run_fetch(self, question, display, gen, **kwargs):
+        try:
+            self._fetch(question, display, gen, **kwargs)
+        finally:
+            if gen == self._main_gen:
+                self._main_inflight = False
+
+    # ---------- черга відповідей (AnswerDeck) ----------
+    def _queue_on(self, display):
+        return getattr(config, "RIBBON_QUEUE", False) and hasattr(display, "reserve")
+
+    def _stale(self, gen):
+        """Відповідь уже нікому не потрібна: прийшло нове питання. З чергою головна
+        відповідь (та, що на стрічці або пишеться для неї) живе далі - нове питання
+        її не вбиває, застаріває лише попередня відповідь у черзі."""
+        return gen != self._gen and gen != self._main_gen
+
+    def promoted(self, gen):
+        """Черга показала відповідь: тепер головна вона, наступне питання - з чистого."""
+        self._main_gen = gen
+        self._queued_parts = []
+        if self._queued_text:
+            self.last_shown_answer = self._queued_text
+        self._queued_text = None
+
+    def _merge_queued(self, question, epoch):
+        """Усе, що інтерв'юер сказав під час стрічки, - одне питання. Та сама фраза,
+        що виросла (той самий epoch), замінює свою попередню версію."""
+        if self._queued_parts and epoch is not None and self._queued_parts[-1][0] == epoch:
+            self._queued_parts[-1] = (epoch, question)
+        else:
+            self._queued_parts.append((epoch, question))
+        return " ".join(q for _, q in self._queued_parts)
 
     def _glue_prepared(self, question):
         """-> (готові відповіді на частини підряд, частини без готової відповіді)."""
@@ -1060,7 +1114,7 @@ class SuggestionProvider:
                 last_push = 0.0
                 first_push_done = [False]
                 for chunk in stream:
-                    if gen != self._gen:
+                    if self._stale(gen):
                         # прийшло нове питання — стрім застарів, не показуємо
                         return
                     now = time.time()
@@ -1081,7 +1135,7 @@ class SuggestionProvider:
                             r = not first_push_done[0]
                             first_push_done[0] = True
                             # prefix уже на стрічці: дописуємо, а не рестартуємо
-                            self._set_text(display, prefix + self._clean(acc), restart=r and not prefix)
+                            self._set_text(display, prefix + self._clean(acc), restart=r and not prefix, gen=gen)
                 if acc.strip():
                     box["a"] = acc.strip()
             except Exception as e:
@@ -1227,18 +1281,28 @@ class SuggestionProvider:
             return
 
         # поки генерували — прийшло нове питання: відповідь застаріла
-        if gen != self._gen:
+        if self._stale(gen):
             print("[AI] stale answer dropped (new question arrived)")
             return
 
         # після стріму повний текст лише ДОПОВНЮЄ стрічку. Раніше він ішов як нова
         # відповідь: стрім пушить раз на 0.25с, останні слова в пуш не потрапляли,
         # повний текст відрізнявся від показаного - і стрічка їхала з початку
-        self._set_text(display, prefix + answer, restart=not prefix and not streamed)
+        self._set_text(display, prefix + answer, restart=not prefix and not streamed, gen=gen)
 
-    def _set_text(self, display, text, restart=False):
-        self.last_shown_answer = text
+    def _set_text(self, display, text, restart=False, gen=None):
+        if self._queue_on(display) and gen in self._queued_gens and gen != self._main_gen:
+            # відповідь у черзі ще не показана: "щойно було на стрічці" - не про неї
+            self._queued_text = text
+        else:
+            self.last_shown_answer = text
         text = text.replace("\n", "   ")
+        if self._queue_on(display):
+            try:
+                display.after(0, display.write, gen, text, restart, gen in self._queued_gens)
+            except Exception:
+                pass
+            return
         try:
             # restart=True (нова відповідь) = рестарт стрічки зі свіжого заїзду;
             # стрімінг-пуши того ж розрахунку = оновлення тексту на лету

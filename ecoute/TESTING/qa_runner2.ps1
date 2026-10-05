@@ -2,7 +2,12 @@
     [string]$QuestionFile = "",
     [string]$OutputFile = "",
     [string]$Mode = "run",
-    [int]$MinQuestions = 100
+    [int]$MinQuestions = 100,
+    # -Queue: ecoute з ЧЕРГОЮ, як на інтерв'ю. Наступне питання звучить лише коли
+    # стрічка доїхала до кінця і минула пауза PauseSeconds (питання не нагромаджуються).
+    # Без -Queue: черга вимкнена, пауза після відповіді 10 с (старий режим)
+    [switch]$Queue,
+    [int]$PauseSeconds = 10
 )
 $ErrorActionPreference = "Continue"
 
@@ -74,7 +79,9 @@ function Read-NewLog {
 }
 
 # ---------- launch ecoute fresh ----------
-$proc = Start-Process -FilePath "py" -ArgumentList "-3.14","-u","main.py","--active" `
+$ecouteArgs = @("-3.14","-u","main.py","--active")
+if (-not $Queue) { $ecouteArgs += "--no-queue" }
+$proc = Start-Process -FilePath "py" -ArgumentList $ecouteArgs `
         -WorkingDirectory $ecouteDir -WindowStyle Hidden -PassThru
 
 $ready = $false
@@ -258,7 +265,21 @@ foreach ($q in $questions) {
         Set-Status "FATAL ecoute exited at question $idx/$Qn"
         exit 1
     }
-    Start-Sleep -Seconds 10
+    if ($Queue) {
+        # чекаємо, поки стрічка доїде: останній "ribbon done" пізніше за останній "START ribbon"
+        $ribbonDeadline = (Get-Date).AddSeconds(150)
+        while ((Get-Date) -lt $ribbonDeadline) {
+            $fsQ = [System.IO.File]::Open($logPath, [System.IO.FileMode]::Open, [System.IO.FileAccess]::Read, [System.IO.FileShare]::ReadWrite)
+            try {
+                $srQ = New-Object System.IO.StreamReader($fsQ, [System.Text.Encoding]::UTF8, $true, 8192)
+                $all = $srQ.ReadToEnd()
+                $srQ.Dispose()
+            } finally { $fsQ.Dispose() }
+            if ($all.LastIndexOf("[PROMPT] ribbon done") -ge $all.LastIndexOf("[PROMPT] START ribbon")) { break }
+            Start-Sleep -Milliseconds 500
+        }
+    }
+    Start-Sleep -Seconds $PauseSeconds
 }
 
 # ---------- finish ----------

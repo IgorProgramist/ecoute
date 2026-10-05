@@ -11,7 +11,9 @@ import AudioRecorder
 from AudioRecorder import DefaultMicRecorder, DefaultSpeakerRecorder, start_keepalive
 from AudioTranscriber import AudioTranscriber
 import TranscriberModels
+from datetime import datetime
 from Teleprompter import Teleprompter
+from AnswerDeck import AnswerDeck
 from SuggestionProvider import SuggestionProvider, load_api_key
 
 CHROMA = config.TRANSPARENT_COLOR
@@ -167,6 +169,17 @@ def main():
     display = Teleprompter(root, height=160)
     display.pack(fill="both", expand=True)
     display.hide()
+    # --no-queue: тест-ранер міряє кожне питання окремо, черга там склеїла б сусідні
+    if getattr(config, "RIBBON_QUEUE", False) and '--no-queue' not in sys.argv:
+        # черга відповідей: нове питання не перериває стрічку (вимикач у config.py)
+        def speaker_silence_s():
+            last = transcriber.get_speaker_last_ts()
+            return 999.0 if last is None else (datetime.utcnow() - last).total_seconds()
+        display = AnswerDeck(display, silence_fn=speaker_silence_s, wait_s=config.QUEUE_SILENCE_S)
+        display.on_promote = suggestion_provider.promoted
+        display.arm_hotkeys()
+        display.run()
+        print("[INFO] answer queue ON: a new question does not interrupt the ribbon")
 
     gate = IdleGate()
     gate.start(display, transcriber, suggestion_provider)

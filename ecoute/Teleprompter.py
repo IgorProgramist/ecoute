@@ -45,6 +45,8 @@ class Teleprompter(tk.Canvas):
         self._last_t = 0.0
         self._landed_at = 0.0
         self._last_toggle = 0.0
+        self.on_done = None      # fn(): стрічка довезла текст до кінця (слухає AnswerDeck)
+        self._badge = None       # "+N" у кутку: скільки реплік чекає в черзі
         self._start_global_pause()
         self._start_global_hotkeys()
 
@@ -157,6 +159,18 @@ class Teleprompter(tk.Canvas):
             self.coords(self._win, self.winfo_width() or 1000, self._safe_height() // 2)
         self._label.config(text="")
 
+    def is_busy(self):
+        """Стрічка їде або стоїть на паузі."""
+        return self._scrolling or self._paused
+
+    def set_badge(self, text):
+        """Маленька позначка в правому верхньому куті ("+1" = у черзі чекає відповідь)."""
+        if self._badge is None:
+            self._badge = self.create_text(0, 4, text="", anchor="ne", fill="#FFD479",
+                                           font=("Arial", 14, "bold"))
+        self.coords(self._badge, (self.winfo_width() or 1000) - 8, 4)
+        self.itemconfig(self._badge, text=text or "")
+
     def sync(self, you_text):
         # суфлер-режим: sync нічого не робить, стрічка їде сама
         pass
@@ -229,6 +243,9 @@ class Teleprompter(tk.Canvas):
                 done = self._current_text
                 self.hide()
                 self._done_text = done
+                print("[PROMPT] ribbon done")     # тест-ранер чекає цей рядок перед наступним питанням
+                if self.on_done:
+                    self.on_done()
             return
 
         self.coords(self._win, self._x, self._safe_height() // 2)
